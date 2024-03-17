@@ -6,20 +6,28 @@ using namespace mochen::log;
 // =============================================================================================================
 // class LogAppender
 
-LogAppender::LogAppender(LogLevel _level = LogLevel::debug) : m_level(_level)
-{
+LogAppender::LogAppender() : m_level(LogLevel::debug), m_type(Type::withoutLogAppender)
+{    
 
 }
 
-LogLevel LogAppender::getLevel()
+
+inline LogLevel LogAppender::getLevel()
 {
 	return m_level;
 }
-           
-void LogAppender::setLevel(LogLevel _level)
+
+
+inline void LogAppender::setLevel(LogLevel _level)
 {
 	m_level = _level;
 }
+
+inline LogAppender::Type LogAppender::getType()
+{
+	return m_type;
+}
+
 
 
 
@@ -29,6 +37,7 @@ void LogAppender::setLevel(LogLevel _level)
 ConsoleLogAppender::ConsoleLogAppender(LogLevel _level)
 {
 	m_level = _level;
+	m_type = Type::ConsoleLogAppender;
 }
 
 void ConsoleLogAppender::log(const char* _message)
@@ -37,22 +46,26 @@ void ConsoleLogAppender::log(const char* _message)
 }
 
 
-
 // =============================================================================================================
 // class FileLogAppender
 
 FileLogAppender::FileLogAppender()
 {
 	m_level = LogLevel::debug;
+	m_type = Type::FileLogAppender;
 	m_filename = nullptr;
 	m_fp = nullptr;
+	m_maxSize = 1024;
 }
 
 
-FileLogAppender::FileLogAppender(const std::string& _filename, LogLevel _level = LogLevel::debug)
+FileLogAppender::FileLogAppender(const std::string& _filename, int _maxSize, LogLevel _level)
 {
 	m_level = _level;
-	m_filename = (char*)malloc(_filename.size() + 1);      // +1保存结尾的\0
+	m_type = Type::FileLogAppender;
+	m_maxSize = 1024;
+
+	m_filename = (char*)malloc(sizeof(char) * (_filename.size() + 1));  // +1保存结尾的\0
 	strcpy(m_filename, _filename.c_str());
 
 	if ((m_fp = fopen(m_filename, "a")) == nullptr) {
@@ -67,19 +80,6 @@ FileLogAppender::~FileLogAppender()
 }
 
 
-FileLogAppender::FileLogAppender(const FileLogAppender& _value)
-{
-	m_level = _value.m_level;
-
-	m_filename = (char*)malloc(strlen(_value.m_filename) + 1);      // +1保存结尾的\0
-	strcpy(m_filename, _value.m_filename);
-
-	if ((m_fp = fopen(m_filename, "a")) == nullptr) {
-		throw std::logic_error("filded to open the file");    // std::logic_error异常对象中会自动包含文件名和行号等调试信息
-	}
-}
-
-
 FileLogAppender::FileLogAppender(FileLogAppender&& _value) noexcept
 {
 	m_level = _value.m_level;
@@ -89,20 +89,6 @@ FileLogAppender::FileLogAppender(FileLogAppender&& _value) noexcept
 	_value.m_level = LogLevel::debug;
 	_value.m_filename = nullptr;
 	_value.m_fp = nullptr;
-}
-
-
-void FileLogAppender::operator=(const FileLogAppender& _value)
-{
-	clear();
-	m_level = _value.m_level;
-
-	m_filename = (char*)malloc(strlen(_value.m_filename) + 1);      // +1保存结尾的\0
-	strcpy(m_filename, _value.m_filename);
-
-	if ((m_fp = fopen(m_filename, "a")) == nullptr) {
-		throw std::logic_error("filded to open the file");    // std::logic_error异常对象中会自动包含文件名和行号等调试信息
-	}
 }
 
 
@@ -124,6 +110,11 @@ void FileLogAppender::log(const char* _message)
 	if (m_fp == nullptr) {
 		throw std::logic_error("There is no initialization m_file, m_file is nullptr");
 	}
+
+	if (getFileSize() >= m_maxSize) {
+		scrolling();  // 滚动
+	}
+
 	fwrite(_message, strlen(_message), 1, m_fp);
 }
 
@@ -143,12 +134,41 @@ void FileLogAppender::open(const std::string& _filename)
 {
 	clear();
 
-	m_filename = (char*)malloc(_filename.size() + 1);      // +1保存结尾的\0
+	m_filename = (char*)malloc(sizeof(char) * (_filename.size() + 1));      // +1保存结尾的\0
 	strcpy(m_filename, _filename.c_str());
 
 	if ((m_fp = fopen(m_filename, "a")) == nullptr) {
 		throw std::logic_error("filded to open the file");    // std::logic_error异常对象中会自动包含文件名和行号等调试信息
 	}
+}
+
+
+inline std::string FileLogAppender::getFilename()
+{
+	if (m_filename == nullptr) {
+		return "";
+	}
+	else {
+		return std::string(m_filename);
+	}
+}
+
+
+inline int FileLogAppender::getFileSize()
+{
+	int size = 0;
+	fseek(m_fp, 0, SEEK_END);    // 移动文件指针到文件结尾
+	size = ftell(m_fp);          // 获取当前文件指针的位置，即文件大小，单位字节
+	fseek(m_fp, 0, SEEK_SET);    // 移动文件指针到文件开头  ？？？？？？？？？？？？？？？？？
+	return size;
+}
+
+void FileLogAppender::scrolling()
+{
+	snprintf(nullptr,0,"%[^.]",)
+
+	m_filename
+
 }
 
 

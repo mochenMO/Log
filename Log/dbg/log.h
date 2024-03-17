@@ -1,7 +1,7 @@
 
 /*// 还未解决的问题
 * 1.throw std::logic_error("type error, not int value");
-*
+* 2.日志的滚动机制，要配合配置系统保存当前使用的文件名，才能实现续写功能！！！
 *
 *
 */
@@ -27,8 +27,12 @@
 			return 0;
 		}
 * 
-* 2. STL存虚基类时，因为无法调用派生类的拷贝或移动函数，因此存虚基类的指针。
-* 3.
+* 2.STL存虚基类时，因为无法调用派生类的拷贝或移动函数，因此存虚基类的指针。
+* 3.智能指针通常以值类型作为参数类型
+* 
+* 
+* 
+* 
 */
 
 
@@ -79,14 +83,15 @@ public:
 public:
 	enum class Type
 	{
-		ConsoleLogAppender = 0,
-		FileLogAppender = 1
+		withoutLogAppender = 0,
+		ConsoleLogAppender,
+		FileLogAppender
 	};
 protected:
 	Type m_type;
 	LogLevel m_level;
 public:
-	LogAppender(LogLevel _level = LogLevel::debug);
+	LogAppender();
 	virtual ~LogAppender() {}                    // 虚析构函数需要实现函数的定义，如果只写函数说明，可能出现链接错误
 
 	virtual void log(const char* _message) = 0;  // 纯虚函数
@@ -111,7 +116,7 @@ class FileLogAppender : public LogAppender
 private:
 	char* m_filename;
 	FILE* m_fp;
-	int maxSize;
+	int m_maxSize;
 public:
 	FileLogAppender();
 	FileLogAppender(const std::string& _filename, int _maxSize = 1024, LogLevel _level = LogLevel::debug);
@@ -128,7 +133,8 @@ public:
 	void open(const std::string& _filename);
 	inline std::string getFilename();
 
-	void scrolling();
+	inline int getFileSize();
+	void scrolling();   // 日志的滚动机制，要配合配置系统保存当前使用的文件名，才能实现续写功能！！！
 };
 
 
