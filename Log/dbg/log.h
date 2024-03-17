@@ -40,11 +40,14 @@
 
 #include <string>
 #include <list>
-#include <deque>
-#include <stdexcept>
-#include <memory>
+#include <stdexcept>  // throw std::logic_error 
+#include <memory>     // std::share_ptr
+#include <thread>
+#include <mutex>
 
-#include <Windows.h>
+
+
+// #include <Windows.h>
 
 
 namespace mochen
@@ -73,15 +76,23 @@ class LogAppender
 {
 public:
 	using ptr = std::shared_ptr<LogAppender>;
+public:
+	enum class Type
+	{
+		ConsoleLogAppender = 0,
+		FileLogAppender = 1
+	};
 protected:
+	Type m_type;
 	LogLevel m_level;
 public:
 	LogAppender(LogLevel _level = LogLevel::debug);
 	virtual ~LogAppender() {}                    // 虚析构函数需要实现函数的定义，如果只写函数说明，可能出现链接错误
 
 	virtual void log(const char* _message) = 0;  // 纯虚函数
-	LogLevel get_level();
-	void set_level(LogLevel _level);
+	inline LogLevel getLevel();
+	inline void setLevel(LogLevel _level);
+	inline Type getType();
 };
 
 
@@ -94,25 +105,30 @@ public:
 };
 
 
+
 class FileLogAppender : public LogAppender
 {
 private:
 	char* m_filename;
 	FILE* m_fp;
+	int maxSize;
 public:
 	FileLogAppender();
-	FileLogAppender(const std::string& _filename, LogLevel _level = LogLevel::debug);
+	FileLogAppender(const std::string& _filename, int _maxSize = 1024, LogLevel _level = LogLevel::debug);
 	~FileLogAppender();
 
-	FileLogAppender(const FileLogAppender& _value);
-	FileLogAppender(FileLogAppender&& _value) noexcept;
+	FileLogAppender(const FileLogAppender& _value) = delete;  // 不能拷贝，因为实现滚动机制时要改变文件名。
+	FileLogAppender(FileLogAppender&& _value) noexcept ;
 
-	void operator=(const FileLogAppender& _value);
+	void operator=(const FileLogAppender& _value) = delete;
 	void operator=(FileLogAppender&& _value) noexcept;
 
 	void log(const char* _message) override;
 	void clear();
 	void open(const std::string& _filename);
+	inline std::string getFilename();
+
+	void scrolling();
 };
 
 
@@ -124,29 +140,44 @@ struct LogEvent
 	const char					*m_filename;
 	int						     m_line;
 	const char                  *m_content;
-	std::list<LogAppender::ptr> *m_appender_list;
+	std::list<LogAppender::ptr> *m_appenderList;
 };
 
 
 // 日志事件管理器
 class LogEventManager
 {
+public:
+	using ptr = std::shared_ptr<LogEventManager>;
 private:
-	// LogFormatter 。。。。
-	std::deque<LogEvent*> m_logEvent_equeue;
-	HANDLE m_hThread;
+	struct LogEventQueue
+	{
+		LogEvent m_logEvent;
+		LogEventQueue* next;
+		LogEventQueue* prev;
+	};
+private:
+	std::thread m_thread;
+	std::mutex m_mutex;
+	LogEventQueue* m_logEventQueue;
+	LogEventQueue* m_ptrWrite;
+	LogEventQueue* m_ptrRead;
+	LogEventQueue* m_ptrDelete;
+	bool isCanExit;
+
 public:
 	LogEventManager();
 	~LogEventManager();
 
-	LogEventManager(const LogEventManager& _value) = default;
-	LogEventManager(LogEventManager&& _value) noexcept = default;
+	LogEventManager(const LogEventManager& _value) = delete;
+	LogEventManager(LogEventManager&& _value) noexcept = delete;
 
-	LogEventManager& operator=(const LogEventManager& _value) = default;
-	LogEventManager& operator=(LogEventManager&& _value) noexcept = default;
+	LogEventManager& operator=(const LogEventManager& _value) = delete;
+	LogEventManager& operator=(LogEventManager&& _value) noexcept = delete;
 
-	static DWORD thread_main_funtion_deal_logEvent_equeue(void* _value);
-	void add_logEvent(LogEvent _logEvent);
+	void clear();
+	void dealLogEvent_threadFuntion();
+	void addLogEvent(LogEvent _logEvent);
 };
 
 
@@ -155,11 +186,12 @@ public:
 class Logger
 {
 private:
-	std::string m_loggername;
-	std::list<LogAppender::ptr> *m_appender_list;    // LogAppender是虚基类，赋值时无法调用派生类的拷贝或移动函数，因此LogAppender*。同时因为满足第三种内存管理情况，为了方便管理内存，能智能指针。
+	LogEventManager::ptr m_logEventManager;   
+	std::string m_loggerName;
+	std::list<LogAppender::ptr> *m_appenderList;    // LogAppender是虚基类，赋值时无法调用派生类的拷贝或移动函数，因此LogAppender*。同时因为满足第三种内存管理情况，为了方便管理内存，能智能指针。
 public:
 	Logger(const std::string& _loggername);
-	Logger(const std::string& _loggername, LogAppender::ptr _appender_ptr);    // 为什么不用std::list<LogAppender::ptr>&
+	Logger(const std::string& _loggername, LogAppender::ptr _appender_ptr);    // 注意智能指针通常以值类型作为参数类型
 	// 列表初始化????
 
 
@@ -179,41 +211,50 @@ public:
 	void error(const char* _format, ...);
 	void fatal(const char* _format, ...);
 
-	void set_loggername();
-	void set_level(LogLevel _level);
+	inline void setLogEventManager(LogEventManager::ptr _logEventManager);   // 注意智能指针通常以值类型作为参数类型
+	inline LogEventManager* getLogEventManager();
+	inline bool clearLogEventManager();      // 不会释放默认的LogEventManager
 
-	bool add_appender(const LogAppender& _value);
-	bool remove_appender();
-	std::list<LogAppender>& get_appender_list();
+	inline void setLoggerName(const std::string _loggerName);
+	inline std::string getLoggerName();
+
+	bool addAppender(const LogAppender& _value);
+	inline std::list<LogAppender>* getAppenderList();   // 自己取实现 removeAppender
 };
 
 
 
 
-inline LogAppender::ptr GetDefauleLogAppender()
+inline LogAppender::ptr getDefauleLogAppender()
 {
 	static LogAppender::ptr defauleLogAppender = std::make_shared<ConsoleLogAppender>();
 	return defauleLogAppender;
 }
 
-inline Logger* GetDefauleLogger()
+inline Logger* getDefauleLogger()
 {
-	static Logger defauleLogger("defauleLogger", GetDefauleLogAppender());
+	static Logger defauleLogger("defaule", getDefauleLogAppender());
 	return &defauleLogger;
 }
 
-inline LogEventManager* GetLogEventManager()
+
+// LogEventManager logEventManager{};  // 在全局区创建 LogEventManager
+
+inline LogEventManager* getDefauleLogEventManager()
 {
-	static LogEventManager logEventManager{};
-	return &logEventManager;
+	// return &logEventManager;    // 返回全局的 LogEventManager
 }
 
 
-void debug(const char* _format, ...);
-void info(const char* _format, ...);
-void warn(const char* _format, ...);
-void error(const char* _format, ...);
-void fatal(const char* _format, ...);
+
+inline void debug(const char* _format, ...);
+inline void info(const char* _format, ...);
+inline void warn(const char* _format, ...);
+inline void error(const char* _format, ...);
+inline void fatal(const char* _format, ...);
+
+
+
 
 
 

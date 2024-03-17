@@ -11,12 +11,12 @@ LogAppender::LogAppender(LogLevel _level = LogLevel::debug) : m_level(_level)
 
 }
 
-LogLevel LogAppender::get_level()
+LogLevel LogAppender::getLevel()
 {
 	return m_level;
 }
            
-void LogAppender::set_level(LogLevel _level)
+void LogAppender::setLevel(LogLevel _level)
 {
 	m_level = _level;
 }
