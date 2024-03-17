@@ -60,6 +60,8 @@ namespace mochen
 namespace log
 {
 
+struct LogEvent;   // 前向声明
+
 
 // 日志级别
 enum class LogLevel
@@ -94,7 +96,7 @@ public:
 	LogAppender();
 	virtual ~LogAppender() {}                    // 虚析构函数需要实现函数的定义，如果只写函数说明，可能出现链接错误
 
-	virtual void log(const char* _message) = 0;  // 纯虚函数
+	virtual void log(LogEvent _event) = 0;  // 纯虚函数
 	inline LogLevel getLevel();
 	inline void setLevel(LogLevel _level);
 	inline Type getType();
@@ -106,7 +108,7 @@ class ConsoleLogAppender : public LogAppender
 public:
 	ConsoleLogAppender(LogLevel _level = LogLevel::debug);
 
-	void log(const char* _message) override;
+	void log(LogEvent _event) override;
 };
 
 
@@ -114,7 +116,7 @@ public:
 class FileLogAppender : public LogAppender
 {
 private:
-	char* m_filename;
+	std::string m_filename;
 	FILE* m_fp;
 	int m_maxSize;
 public:
@@ -128,9 +130,10 @@ public:
 	void operator=(const FileLogAppender& _value) = delete;
 	void operator=(FileLogAppender&& _value) noexcept;
 
-	void log(const char* _message) override;
+	void log(LogEvent _event) override;
 	void clear();
 	void open(const std::string& _filename);
+	// inline std::string setFilename();      // 为了m_filename和m_fp相匹配，禁止用户直接改文件名，而是通过open去改文件名
 	inline std::string getFilename();
 
 	inline int getFileSize();
@@ -141,11 +144,11 @@ public:
 // 日志事件
 struct LogEvent
 {
-	unsigned long long			 m_timestamp;
+	time_t		            	 m_timestamp;
 	const char					*m_loggername;
 	const char					*m_filename;
 	int						     m_line;
-	const char                  *m_content;
+	char                        *m_content;         // 注意 m_content 需要手动释放
 	std::list<LogAppender::ptr> *m_appenderList;
 };
 
@@ -158,9 +161,9 @@ public:
 private:
 	struct LogEventQueue
 	{
-		LogEvent m_logEvent;
-		LogEventQueue* next;
-		LogEventQueue* prev;
+		LogEvent m_data;
+		LogEventQueue* m_next;
+		LogEventQueue* m_prev;
 	};
 private:
 	std::thread m_thread;
@@ -169,7 +172,7 @@ private:
 	LogEventQueue* m_ptrWrite;
 	LogEventQueue* m_ptrRead;
 	LogEventQueue* m_ptrDelete;
-	bool isCanExit;
+	bool m_isCanExit;
 
 public:
 	LogEventManager();
@@ -180,8 +183,10 @@ public:
 
 	LogEventManager& operator=(const LogEventManager& _value) = delete;
 	LogEventManager& operator=(LogEventManager&& _value) noexcept = delete;
-
-	void clear();
+	
+	void clearLogEventNode(LogEventQueue* _node);
+	void clearLogEventQueue();
+	
 	void dealLogEvent_threadFuntion();
 	void addLogEvent(LogEvent _logEvent);
 };

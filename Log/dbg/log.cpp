@@ -40,9 +40,10 @@ ConsoleLogAppender::ConsoleLogAppender(LogLevel _level)
 	m_type = Type::ConsoleLogAppender;
 }
 
-void ConsoleLogAppender::log(const char* _message)
+void ConsoleLogAppender::log(LogEvent _event)
 {
-	printf("%s", _message);
+	// [年月日时分秒][日志器名称][日志等级][日志等级][文件，][][]
+	//printf("%s", );
 }
 
 
@@ -53,7 +54,7 @@ FileLogAppender::FileLogAppender()
 {
 	m_level = LogLevel::debug;
 	m_type = Type::FileLogAppender;
-	m_filename = nullptr;
+	m_filename = "";
 	m_fp = nullptr;
 	m_maxSize = 1024;
 }
@@ -64,11 +65,12 @@ FileLogAppender::FileLogAppender(const std::string& _filename, int _maxSize, Log
 	m_level = _level;
 	m_type = Type::FileLogAppender;
 	m_maxSize = 1024;
+	m_filename = _filename;
 
-	m_filename = (char*)malloc(sizeof(char) * (_filename.size() + 1));  // +1保存结尾的\0
-	strcpy(m_filename, _filename.c_str());
+	std::string temp = _filename;
+	temp += ".txt";
 
-	if ((m_fp = fopen(m_filename, "a")) == nullptr) {
+	if ((m_fp = fopen(temp.c_str(), "a")) == nullptr) {
 		throw std::logic_error("filded to open the file");    // std::logic_error异常对象中会自动包含文件名和行号等调试信息
 	}
 }
@@ -87,7 +89,7 @@ FileLogAppender::FileLogAppender(FileLogAppender&& _value) noexcept
 	m_fp = _value.m_fp;
 	
 	_value.m_level = LogLevel::debug;
-	_value.m_filename = nullptr;
+	_value.m_filename = "";
 	_value.m_fp = nullptr;
 }
 
@@ -101,7 +103,7 @@ void FileLogAppender::operator=(FileLogAppender&& _value) noexcept
 	m_fp = _value.m_fp;
 
 	_value.m_level = LogLevel::debug;
-	_value.m_filename = nullptr;
+	_value.m_filename = "";
 	_value.m_fp = nullptr;
 }
 
@@ -124,20 +126,18 @@ void FileLogAppender::clear()
 		fclose(m_fp);
 		m_fp = nullptr;
 	}
-	if (m_filename != nullptr) {
-		free(m_filename);
-		m_filename = nullptr;
-	}
+	m_filename = "";
 }
 
 void FileLogAppender::open(const std::string& _filename)
 {
 	clear();
 
-	m_filename = (char*)malloc(sizeof(char) * (_filename.size() + 1));      // +1保存结尾的\0
-	strcpy(m_filename, _filename.c_str());
+	m_filename = _filename;
+	std::string temp = _filename;
+	temp += ".txt";
 
-	if ((m_fp = fopen(m_filename, "a")) == nullptr) {
+	if ((m_fp = fopen(temp.c_str(), "a")) == nullptr) {
 		throw std::logic_error("filded to open the file");    // std::logic_error异常对象中会自动包含文件名和行号等调试信息
 	}
 }
@@ -145,12 +145,7 @@ void FileLogAppender::open(const std::string& _filename)
 
 inline std::string FileLogAppender::getFilename()
 {
-	if (m_filename == nullptr) {
-		return "";
-	}
-	else {
-		return std::string(m_filename);
-	}
+	return m_filename;
 }
 
 
@@ -165,10 +160,37 @@ inline int FileLogAppender::getFileSize()
 
 void FileLogAppender::scrolling()
 {
-	snprintf(nullptr,0,"%[^.]",)
+	if (m_fp != nullptr) {   // 由于没有实现setFilename函数，所以 m_fp != nullptr 时 m_filename != ""
+		fclose(m_fp);
+		m_fp = nullptr;
+	}
+	else {
+		throw std::logic_error("There is no initialization m_file, m_file is nullptr");
+	}
 
-	m_filename
+	std::string temp = m_filename;
+	temp += "_log_";
+	char timeString[24] = { 0 };
 
+	time_t timestamp = time(nullptr);
+	struct tm* pt = localtime(&timestamp);    // 注意 pt 指向的内存空间由系统管理，无需手动释放
+
+	// 0000-00-00#00-00-00
+	sprintf(timeString, "%d-%0.2d-%0.2d#%0.2d-%0.2d-%0.2d",
+		pt->tm_year + 1900,
+		pt->tm_mon + 1,
+		pt->tm_mday,
+		pt->tm_hour,
+		pt->tm_min,
+		pt->tm_sec);
+
+	// m_filename_log_0000-00-00#00-00-00
+	temp += timeString;
+	temp += ".txt";
+
+	if ((m_fp = fopen(temp.c_str(), "a")) == nullptr) {
+		throw std::logic_error("filded to open the file");    // std::logic_error异常对象中会自动包含文件名和行号等调试信息
+	}
 }
 
 
@@ -176,30 +198,98 @@ void FileLogAppender::scrolling()
 // =============================================================================================================
 // class LogEventManager
 
-//class LogEventManager
-//{
-//private:
-//	std::deque<LogEvent*> m_logEvent_equeue;
-//	HANDLE m_hThread;
-
-
-
-LogEventManager::LogEventManager()
+LogEventManager::LogEventManager() : 
+	m_thread(&LogEventManager::dealLogEvent_threadFuntion, this),  // 注意使用成员函数指针时要加作用域
+	m_isCanExit(false)
 {
-	m_hThread = CreateThread()
+	m_logEventQueue = (LogEventQueue*)malloc(sizeof(LogEventQueue));
+	m_logEventQueue->m_next = nullptr;
+	m_logEventQueue->m_prev = nullptr;
+
+	m_ptrWrite = m_logEventQueue;
+	m_ptrRead = m_logEventQueue;
+	m_ptrDelete = m_logEventQueue;
 }
 
 
-LogEventManager::~LogEventManager();
-
-
-
-DWORD LogEventManager::thread_main_funtion_deal_logEvent_equeue(void* _value)
+LogEventManager::~LogEventManager()
 {
+	m_isCanExit = true;  // 注意 m_isCanExit = true 且处理完日志队列中所有数据后才能退出
+	m_thread.join();
+	clearLogEventQueue();
+}
+
+
+
+void LogEventManager::clearLogEventNode(LogEventQueue* _node)
+{
+	free(_node->m_data.m_content);
+	free(_node);
+}
+
+void LogEventManager::clearLogEventQueue()
+{
+	LogEventQueue* temp = nullptr;
+
+	while (m_logEventQueue != nullptr) {
+		temp = m_logEventQueue;
+		m_logEventQueue = m_logEventQueue->m_next;
+		free(temp);
+	}
+}
+
+void LogEventManager::dealLogEvent_threadFuntion()
+{
+	LogEventQueue* temp = nullptr;
+	LogEvent tempData = { 0 };
+	char timeString[24] = { 0 };   
+	struct tm* pt = nullptr;     // 注意 pt 指向的内存空间由系统管理，无需手动释放
+
+	while (m_isCanExit == false || m_ptrRead->m_next != nullptr)  // 注意 m_isCanExit = true 且处理完日志队列中所有数据后才能退出
+	{
+		if (m_ptrRead->m_next != nullptr) 
+		{
+			temp = m_ptrRead->m_next;
+			m_ptrRead = m_ptrRead->m_next;
+			tempData = temp->m_data;
+
+			// 处理时间
+			pt = localtime(&tempData.m_timestamp);
+			// [0000-00-00 00:00:00]   // 因为每次写入的值的长度都是固定的，所以不用清空 timeString
+			sprintf(timeString, "[%d-%0.2d-%0.2d %0.2d:%0.2d:%0.2d]",
+				pt->tm_year + 1900,
+				pt->tm_mon + 1,
+				pt->tm_mday,
+				pt->tm_hour,
+				pt->tm_min,
+				pt->tm_sec);
+
+
+			for(auto it = temp->m_data.m_appenderList->begin(); it != temp->m_data.m_appenderList->end(); ++it) {
+				
+				it->get()->log("asdsad");
+
+				
+			
+			}
+
+
+
+
+		}
+	
+	
+	
+	
+	}
+
 
 }
 
-void LogEventManager::add_logEvent(LogEvent _logEvent);
+
+
+
+void LogEventManager::addLogEvent(LogEvent _logEvent);
 
 
 // =============================================================================================================
