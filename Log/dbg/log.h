@@ -29,7 +29,7 @@
 * 
 * 2.STL存虚基类时，因为无法调用派生类的拷贝或移动函数，因此存虚基类的指针。
 * 3.智能指针通常以值类型作为参数类型
-* 
+* 4.全局函数和变量会受到命名空间的约束，但宏不会
 * 
 * 
 * 
@@ -40,6 +40,8 @@
 #pragma once
 #ifndef _MOCHEN_LOG_H_
 #define _MOCHEN_LOG_H_
+
+#define _CRT_SECURE_NO_WARNINGS
 
 
 #include <stdexcept>  // throw std::logic_error 
@@ -52,7 +54,7 @@
 #include <map>
 
 #include <stdarg.h>
-
+#include <time.h>
 
 namespace mochen
 {
@@ -87,14 +89,11 @@ public:
 	};
 protected:
 	Type m_type;
-	LogLevel m_level;
 public:
 	LogAppender();
 	virtual ~LogAppender() {}                    // 虚析构函数需要实现函数的定义，如果只写函数说明，可能出现链接错误
 
 	virtual void log(const char* _massage) = 0;  // 纯虚函数
-	inline LogLevel getLevel();
-	inline void setLevel(LogLevel _level);
 	inline Type getType();
 };
 
@@ -142,9 +141,10 @@ struct LogEvent
 {
 	time_t		 m_timestamp;
 	int			 m_line;
-	const char  *m_filename;         
+	const char  *m_filename;   
+	char        *m_content;            // 申请内存了需要手动释放 
+	LogLevel     m_LogLevel;
 	std::string	 m_loggername;
-	char        *m_content;            // 申请内存了需要手动释放
 	// std::list<std::shared_ptr<LogAppender>> *m_appenderList;    // 错误，因为logger会在LogEventManager之前销毁，该变量会无效。
 };
 
@@ -185,7 +185,7 @@ public:
 	void addAppender(std::string _loggername, std::shared_ptr<LogAppender> _appender);   // 注意建议在创建线程之前用该函数，以免造成冲突的情况
 	inline bool isFindLogger(const std::string& _loggername);
 
-	void logFormatter(std::stringstream& _ss, LogLevel _level, LogEvent& _logEvent);
+	void logFormatter(std::stringstream& _ss, LogEvent& _logEvent);
 	void dealLogEvent_threadFuntion();
 	void addLogEvent(LogEvent _logEvent);   // 该函数需要线程安全
 };
@@ -208,7 +208,7 @@ private:
 	LogLevel m_level;
 public:
 	Logger(const std::string& _loggername, LogLevel _level = LogLevel::debug, std::shared_ptr<LogAppender> _appender = defauleLogAppender);
-	~Logger() = default;
+	~Logger() = default;   // LogAppender的释放交给LogEventManager
 
 	Logger(const Logger& _logger) = delete;
 	Logger(Logger&& _logger) noexcept = delete;
@@ -216,6 +216,7 @@ public:
 	Logger& operator=(const Logger& _logger) = delete;
 	Logger& operator=(Logger&& _logger) noexcept = delete;
 
+	void log(LogLevel _level, const char* _format, va_list _args);
 	void log(LogLevel _level, const char* _format, ...);
 	void debug(const char* _format, ...);
 	void info(const char* _format, ...);
@@ -223,33 +224,28 @@ public:
 	void error(const char* _format, ...);
 	void fatal(const char* _format, ...);
 
+
+
 	// inline void setLoggerName(const std::string _loggerName);    // 禁止用户改 loggerName
 	inline std::string getLoggerName();
 
-	bool addAppender(std::shared_ptr<LogAppender> _appender);
-	inline std::list<LogAppender>* getAppenderList();   // 自己取实现 removeAppender
+	bool addAppender(std::shared_ptr<LogAppender> _appender);       // 注意建议在创建线程之前用该函数，以免造成冲突的情况
+	// bool deleteAppender(....);                                   // 根据实际考量，暂时不实现deleteAppender功能
 
 	inline LogLevel getLogLevel();
-	inline LogLevel setLogLevel();
+	inline void setLogLevel(LogLevel _level);
 };
 
 
 
 // 创建全局的 defauleLogger
-Logger defauleLogger("defauleLogger", defauleLogAppender);
+Logger defauleLogger("defauleLogger");
 
-
-inline void debug(const char* _format, ...);
+inline void debug(const char* _format, ...);   // 全局函数和变量会受到命名空间的约束，但宏不会
 inline void info(const char* _format, ...);
 inline void warn(const char* _format, ...);
 inline void error(const char* _format, ...);
 inline void fatal(const char* _format, ...);
-
-
-
-
-
-
 
 
 

@@ -6,22 +6,11 @@ using namespace mochen::log;
 // =============================================================================================================
 // class LogAppender
 
-LogAppender::LogAppender() : m_level(LogLevel::debug), m_type(Type::withoutLogAppender)
+LogAppender::LogAppender() : m_type(Type::withoutLogAppender)
 {    
 
 }
 
-
-inline LogLevel LogAppender::getLevel()
-{
-	return m_level;
-}
-
-
-inline void LogAppender::setLevel(LogLevel _level)
-{
-	m_level = _level;
-}
 
 inline LogAppender::Type LogAppender::getType()
 {
@@ -36,7 +25,6 @@ inline LogAppender::Type LogAppender::getType()
 
 ConsoleLogAppender::ConsoleLogAppender(LogLevel _level)
 {
-	m_level = _level;
 	m_type = Type::ConsoleLogAppender;
 }
 
@@ -51,7 +39,6 @@ void ConsoleLogAppender::log(const char* _massage)
 
 FileLogAppender::FileLogAppender()
 {
-	m_level = LogLevel::debug;
 	m_type = Type::FileLogAppender;
 	m_filename = "";
 	m_fp = nullptr;
@@ -61,7 +48,6 @@ FileLogAppender::FileLogAppender()
 
 FileLogAppender::FileLogAppender(const std::string& _filename, int _maxSize, LogLevel _level)
 {
-	m_level = _level;
 	m_type = Type::FileLogAppender;
 	m_maxSize = 1024;
 	m_filename = _filename;
@@ -83,11 +69,9 @@ FileLogAppender::~FileLogAppender()
 
 FileLogAppender::FileLogAppender(FileLogAppender&& _value) noexcept
 {
-	m_level = _value.m_level;
 	m_filename = _value.m_filename;
 	m_fp = _value.m_fp;
 	
-	_value.m_level = LogLevel::debug;
 	_value.m_filename = "";
 	_value.m_fp = nullptr;
 }
@@ -97,11 +81,9 @@ void FileLogAppender::operator=(FileLogAppender&& _value) noexcept
 {
 	clear();
 
-	m_level = _value.m_level;
 	m_filename = _value.m_filename;
 	m_fp = _value.m_fp;
 
-	_value.m_level = LogLevel::debug;
 	_value.m_filename = "";
 	_value.m_fp = nullptr;
 }
@@ -269,7 +251,7 @@ inline bool LogEventManager::isFindLogger(const std::string& _loggername)
 }
 
 
-inline void LogEventManager::logFormatter(std::stringstream& _ss, LogLevel _level, LogEvent& _logEvent)
+inline void LogEventManager::logFormatter(std::stringstream& _ss, LogEvent& _logEvent)
 {
 	char timeString[24] = { 0 };
 	struct tm* pt = nullptr;     // 注意 pt 指向的内存空间由系统管理，无需手动释放
@@ -288,8 +270,8 @@ inline void LogEventManager::logFormatter(std::stringstream& _ss, LogLevel _leve
 	// [年-月-日 时:分:秒][日志器名称][日志等级][文件名]:[行号][日志信息]
 	_ss << "[" << timeString << "]";
 	_ss << "[" << _logEvent.m_loggername << "]";
-	_ss << "[" << logLevelString[(int)_level] << "]";
- 	_ss << "[" << _logEvent.m_filename << "]";
+	_ss << "[" << logLevelString[(int)_logEvent.m_LogLevel] << "]";
+ 	_ss << "[" << _logEvent.m_filename << "]:";
 	_ss << "[" << _logEvent.m_line << "]";
 	_ss << "[" << _logEvent.m_content << "]";
 	_ss << "\n";
@@ -314,9 +296,10 @@ void LogEventManager::dealLogEvent_threadFuntion()
 			tempData = tempNode->m_data;
 			tempList = (*m_LogAppenderListMap)[tempData.m_loggername];
 
-			for(auto it = tempList->begin(); it != tempList->end(); ++it) {
-				logFormatter(ss, it->get()->getLevel(), tempData);    // 或者用 (*(*it)).getType();
+			for(auto it = tempList->begin(); it != tempList->end(); ++it) {  // 或者用 (*(*it)).getType();
+				logFormatter(ss, tempData);    
 				it->get()->log(ss.str().c_str());
+				ss.str("");   // 清空 stringstream
 			}
 
 			if (m_ptrDelete->m_next != m_ptrRead) {
@@ -358,55 +341,178 @@ Logger::Logger(const std::string& _loggername, LogLevel _level, std::shared_ptr<
 	if (defauleLogEventManager.isFindLogger(_loggername) == true) {
 		throw std::logic_error("The _loggername already exists");
 	}
-	if ((int)_level > (int)_appender.get()->getType()) {
-		throw std::logic_error("The Appender's LogLevel less than the logger's LogLevel");
-	}
+	
+	m_level = _level;
 
 	m_loggername = _loggername;
 	defauleLogEventManager.addAppender(_loggername, _appender);
 }
 
 
-void Logger::log(LogLevel _level, const char* _format, ...)
+void Logger::log(LogLevel _level, const char* _format, va_list _args)
 {
-	if ((int)m_level < (int)_level) {
+	if ((int)m_level > (int)_level) {
 		return;
 	}
-	
-	
-	va_list args;
-	va_start(args, _format);
-
-
-
-	int size = vsnprintf(nullptr, 0, _format, args);
+	int size = vsnprintf(nullptr, 0, _format, _args);
 	char* buffer = (char*)malloc(sizeof(char) * (size + 1));    // +1保存结尾的"\0"
+	vsprintf(buffer, _format, _args);
 
+	LogEvent data;
+	data.m_timestamp = time(nullptr);
+	data.m_loggername = m_loggername;
+	data.m_LogLevel = m_level;
+	data.m_filename = __FILE__;
+	data.m_line = __LINE__;
+	data.m_content = buffer;
 
+	defauleLogEventManager.addLogEvent(data);
 }
 
 
+void Logger::log(LogLevel _level, const char* _format, ...)
+{
+	if ((int)m_level > (int)_level) {
+		return;
+	}
+	va_list args;
+	va_start(args, _format);
+	log(_level, _format, args);
+	va_end(args);
+}
+
+void Logger::debug(const char* _format, ...)
+{
+	if ((int)m_level > (int)LogLevel::debug) {
+		return;
+	}
+	va_list args;
+	va_start(args, _format);
+	log(LogLevel::debug, _format, args);
+	va_end(args);
+}
+
+void Logger::info(const char* _format, ...)
+{
+	if ((int)m_level > (int)LogLevel::info) {
+		return;
+	}
+	va_list args;
+	va_start(args, _format);
+	log(LogLevel::info, _format, args);
+	va_end(args);
+}
+
+void Logger::warn(const char* _format, ...)
+{
+	if ((int)m_level > (int)LogLevel::warn) {
+		return;
+	}
+	va_list args;
+	va_start(args, _format);
+	log(LogLevel::warn, _format, args);
+	va_end(args);
+}
+
+void Logger::error(const char* _format, ...)
+{
+	if ((int)m_level > (int)LogLevel::error) {
+		return;
+	}
+	va_list args;
+	va_start(args, _format);
+	log(LogLevel::error, _format, args);
+	va_end(args);
+}
+
+void Logger::fatal(const char* _format, ...)
+{
+	if ((int)m_level > (int)LogLevel::fatal) {
+		return;
+	}
+	va_list args;
+	va_start(args, _format);
+	log(LogLevel::fatal, _format, args);
+	va_end(args);
+}
 
 
-void Logger::debug(const char* _format, ...){}
-void Logger::info(const char* _format, ...) {}
-void Logger::warn(const char* _format, ...) {}
-void Logger::error(const char* _format, ...) {}
-void Logger::fatal(const char* _format, ...) {}
+inline std::string Logger::getLoggerName()
+{
+	return m_loggername;
+}
 
-void Logger::set_loggername() {}
-void Logger::set_level(LogLevel _level) {}
+bool Logger::addAppender(std::shared_ptr<LogAppender> _appender)
+{
+	defauleLogEventManager.addAppender(m_loggername, _appender);
+	return true;
+}
 
-bool Logger::add_appender(const LogAppender& _value) {}
-bool Logger::remove_appender() {}
-std::list<LogAppender>& Logger::get_appender_list() {}
+inline LogLevel Logger::getLogLevel()
+{
+	return m_level;
+}
+
+inline void Logger::setLogLevel(LogLevel _level)
+{
+	m_level = _level;
+}
 
 
+// =============================================================================================================
+// 全局的函数模块
 
+inline void debug(const char* _format, ...)
+{
+	if ((int)defauleLogger.getLogLevel() > (int)LogLevel::debug) {
+		return;
+	}
+	va_list args;
+	va_start(args, _format);
+	defauleLogger.log(LogLevel::debug, _format, args);
+	va_end(args);
+}
 
+inline void info(const char* _format, ...)
+{
+	if ((int)defauleLogger.getLogLevel() > (int)LogLevel::info) {
+		return;
+	}
+	va_list args;
+	va_start(args, _format);
+	defauleLogger.log(LogLevel::info, _format, args);
+	va_end(args);
+}
 
-void debug(const char* _format, ...);
-void info(const char* _format, ...);
-void warn(const char* _format, ...);
-void error(const char* _format, ...);
-void fatal(const char* _format, ...);
+inline void warn(const char* _format, ...)
+{
+	if ((int)defauleLogger.getLogLevel() > (int)LogLevel::warn) {
+		return;
+	}
+	va_list args;
+	va_start(args, _format);
+	defauleLogger.log(LogLevel::warn, _format, args);
+	va_end(args);
+}
+
+inline void error(const char* _format, ...)
+{
+	if ((int)defauleLogger.getLogLevel() > (int)LogLevel::error) {
+		return;
+	}
+	va_list args;
+	va_start(args, _format);
+	defauleLogger.log(LogLevel::error, _format, args);
+	va_end(args);
+}
+
+inline void fatal(const char* _format, ...)
+{
+	if ((int)defauleLogger.getLogLevel() > (int)LogLevel::fatal) {
+		return;
+	}
+	va_list args;
+	va_start(args, _format);
+	defauleLogger.log(LogLevel::fatal, _format, args);
+	va_end(args);
+}
