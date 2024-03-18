@@ -2,7 +2,7 @@
 /*// 还未解决的问题
 * 1.throw std::logic_error("type error, not int value");
 * 2.日志的滚动机制，要配合配置系统保存当前使用的文件名，才能实现续写功能！！！
-*
+* 3.void addAppender(std::string _loggername, std::shared_ptr<LogAppender> _appender);   // 注意建议在创建线程之前用该函数，以免造成冲突的情况
 *
 */
 
@@ -42,16 +42,16 @@
 #define _MOCHEN_LOG_H_
 
 
-#include <string>
-#include <list>
 #include <stdexcept>  // throw std::logic_error 
 #include <memory>     // std::share_ptr
 #include <thread>
 #include <mutex>
+#include <string>
+#include <sstream>
+#include <list>
+#include <map>
 
-
-
-// #include <Windows.h>
+#include <stdarg.h>
 
 
 namespace mochen
@@ -59,8 +59,6 @@ namespace mochen
 
 namespace log
 {
-
-struct LogEvent;   // 前向声明
 
 
 // 日志级别
@@ -81,8 +79,6 @@ const char* logLevelString[5] = { "debug","info","warn","error","fatal" };
 class LogAppender
 {
 public:
-	using ptr = std::shared_ptr<LogAppender>;
-public:
 	enum class Type
 	{
 		withoutLogAppender = 0,
@@ -96,7 +92,7 @@ public:
 	LogAppender();
 	virtual ~LogAppender() {}                    // 虚析构函数需要实现函数的定义，如果只写函数说明，可能出现链接错误
 
-	virtual void log(LogEvent _event) = 0;  // 纯虚函数
+	virtual void log(const char* _massage) = 0;  // 纯虚函数
 	inline LogLevel getLevel();
 	inline void setLevel(LogLevel _level);
 	inline Type getType();
@@ -108,7 +104,7 @@ class ConsoleLogAppender : public LogAppender
 public:
 	ConsoleLogAppender(LogLevel _level = LogLevel::debug);
 
-	void log(LogEvent _event) override;
+	void log(const char* _massage) override;
 };
 
 
@@ -130,7 +126,7 @@ public:
 	void operator=(const FileLogAppender& _value) = delete;
 	void operator=(FileLogAppender&& _value) noexcept;
 
-	void log(LogEvent _event) override;
+	void log(const char* _massage) override;
 	void clear();
 	void open(const std::string& _filename);
 	// inline std::string setFilename();      // 为了m_filename和m_fp相匹配，禁止用户直接改文件名，而是通过open去改文件名
@@ -144,20 +140,18 @@ public:
 // 日志事件
 struct LogEvent
 {
-	time_t		            	 m_timestamp;
-	const char					*m_loggername;
-	const char					*m_filename;
-	int						     m_line;
-	char                        *m_content;         // 注意 m_content 需要手动释放
-	std::list<LogAppender::ptr> *m_appenderList;
+	time_t		 m_timestamp;
+	int			 m_line;
+	const char  *m_filename;         
+	std::string	 m_loggername;
+	char        *m_content;            // 申请内存了需要手动释放
+	// std::list<std::shared_ptr<LogAppender>> *m_appenderList;    // 错误，因为logger会在LogEventManager之前销毁，该变量会无效。
 };
 
 
 // 日志事件管理器
 class LogEventManager
 {
-public:
-	using ptr = std::shared_ptr<LogEventManager>;
 private:
 	struct LogEventQueue
 	{
@@ -166,14 +160,14 @@ private:
 		LogEventQueue* m_prev;
 	};
 private:
-	std::thread m_thread;
-	std::mutex m_mutex;
-	LogEventQueue* m_logEventQueue;
-	LogEventQueue* m_ptrWrite;
-	LogEventQueue* m_ptrRead;
-	LogEventQueue* m_ptrDelete;
+	std::thread    m_thread;
+	std::mutex     m_mutex;
+	LogEventQueue *m_logEventQueue;
+	LogEventQueue *m_ptrWrite;
+	LogEventQueue *m_ptrRead;
+	LogEventQueue *m_ptrDelete;
 	bool m_isCanExit;
-
+	std::map<std::string, std::list<std::shared_ptr<LogAppender>>*> *m_LogAppenderListMap; // LogAppender是虚基类，赋值时无法调用派生类的拷贝或移动函数，因此LogAppender*。同时因为满足第三种内存管理情况，为了方便管理内存，能智能指针。
 public:
 	LogEventManager();
 	~LogEventManager();
@@ -186,27 +180,35 @@ public:
 	
 	void clearLogEventNode(LogEventQueue* _node);
 	void clearLogEventQueue();
-	
+
+	void clearLogAppenderListMap();
+	void addAppender(std::string _loggername, std::shared_ptr<LogAppender> _appender);   // 注意建议在创建线程之前用该函数，以免造成冲突的情况
+	inline bool isFindLogger(const std::string& _loggername);
+
+	void logFormatter(std::stringstream& _ss, LogLevel _level, LogEvent& _logEvent);
 	void dealLogEvent_threadFuntion();
-	void addLogEvent(LogEvent _logEvent);
+	void addLogEvent(LogEvent _logEvent);   // 该函数需要线程安全
 };
 
+
+// 创建全局的 defauleLogAppender
+std::shared_ptr<LogAppender> defauleLogAppender = std::make_shared<ConsoleLogAppender>();
+
+
+// 创建全局的 defauleLogEventManager （注意 LogEventManager 是个单例）
+LogEventManager defauleLogEventManager{};
 
 
 // 日志器
 class Logger
 {
 private:
-	LogEventManager::ptr m_logEventManager;   
-	std::string m_loggerName;
-	std::list<LogAppender::ptr> *m_appenderList;    // LogAppender是虚基类，赋值时无法调用派生类的拷贝或移动函数，因此LogAppender*。同时因为满足第三种内存管理情况，为了方便管理内存，能智能指针。
+	// LogEventManager defauleLogEventManager // 用全局的defauleLogEventManager
+	std::string m_loggername; 
+	LogLevel m_level;
 public:
-	Logger(const std::string& _loggername);
-	Logger(const std::string& _loggername, LogAppender::ptr _appender_ptr);    // 注意智能指针通常以值类型作为参数类型
-	// 列表初始化????
-
-
-	~Logger();
+	Logger(const std::string& _loggername, LogLevel _level = LogLevel::debug, std::shared_ptr<LogAppender> _appender = defauleLogAppender);
+	~Logger() = default;
 
 	Logger(const Logger& _logger) = delete;
 	Logger(Logger&& _logger) noexcept = delete;
@@ -214,7 +216,6 @@ public:
 	Logger& operator=(const Logger& _logger) = delete;
 	Logger& operator=(Logger&& _logger) noexcept = delete;
 
-	void clear();
 	void log(LogLevel _level, const char* _format, ...);
 	void debug(const char* _format, ...);
 	void info(const char* _format, ...);
@@ -222,40 +223,20 @@ public:
 	void error(const char* _format, ...);
 	void fatal(const char* _format, ...);
 
-	inline void setLogEventManager(LogEventManager::ptr _logEventManager);   // 注意智能指针通常以值类型作为参数类型
-	inline LogEventManager* getLogEventManager();
-	inline bool clearLogEventManager();      // 不会释放默认的LogEventManager
-
-	inline void setLoggerName(const std::string _loggerName);
+	// inline void setLoggerName(const std::string _loggerName);    // 禁止用户改 loggerName
 	inline std::string getLoggerName();
 
-	bool addAppender(const LogAppender& _value);
+	bool addAppender(std::shared_ptr<LogAppender> _appender);
 	inline std::list<LogAppender>* getAppenderList();   // 自己取实现 removeAppender
+
+	inline LogLevel getLogLevel();
+	inline LogLevel setLogLevel();
 };
 
 
 
-
-inline LogAppender::ptr getDefauleLogAppender()
-{
-	static LogAppender::ptr defauleLogAppender = std::make_shared<ConsoleLogAppender>();
-	return defauleLogAppender;
-}
-
-inline Logger* getDefauleLogger()
-{
-	static Logger defauleLogger("defaule", getDefauleLogAppender());
-	return &defauleLogger;
-}
-
-
-// LogEventManager logEventManager{};  // 在全局区创建 LogEventManager
-
-inline LogEventManager* getDefauleLogEventManager()
-{
-	// return &logEventManager;    // 返回全局的 LogEventManager
-}
-
+// 创建全局的 defauleLogger
+Logger defauleLogger("defauleLogger", defauleLogAppender);
 
 
 inline void debug(const char* _format, ...);
