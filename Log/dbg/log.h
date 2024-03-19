@@ -62,7 +62,6 @@ namespace mochen
 namespace log
 {
 
-
 // 日志级别
 enum class LogLevel
 {
@@ -72,10 +71,6 @@ enum class LogLevel
 	error,
 	fatal
 };
-
-const char* logLevelString[5] = { "debug","info","warn","error","fatal" };
-
-
 
 // 日志输出目的地
 class LogAppender
@@ -139,13 +134,26 @@ public:
 // 日志事件
 struct LogEvent
 {
-	time_t		 m_timestamp;
-	int			 m_line;
-	const char  *m_filename;   
-	char        *m_content;            // 申请内存了需要手动释放 
+
+
+
+	time_t	     m_timestamp;
+	std::string *m_loggername; // 申请内存了需要手动释放 
 	LogLevel     m_LogLevel;
-	std::string	 m_loggername;
+	const char  *m_filename;  
+	int		     m_line;
+	char        *m_content;    // 申请内存了需要手动释放 
 	// std::list<std::shared_ptr<LogAppender>> *m_appenderList;    // 错误，因为logger会在LogEventManager之前销毁，该变量会无效。
+
+	//LogEvent(const LogEvent& _logEvent) {
+	//	m_timestamp = _logEvent.m_timestamp;
+	//	m_timestamp = _logEvent.m_timestamp;
+	//	m_line = _logEvent.m_line;
+	//	m_filename = _logEvent.m_filename;
+	//	m_content = _logEvent.m_content;
+	//	m_LogLevel = _logEvent.m_LogLevel;
+	//	m_loggername = _logEvent.m_loggername;
+	//}
 };
 
 
@@ -167,7 +175,7 @@ private:
 	LogEventQueue *m_ptrRead;
 	LogEventQueue *m_ptrDelete;
 	bool m_isCanExit;
-	std::map<std::string, std::list<std::shared_ptr<LogAppender>>*> *m_LogAppenderListMap; // LogAppender是虚基类，赋值时无法调用派生类的拷贝或移动函数，因此LogAppender*。同时因为满足第三种内存管理情况，为了方便管理内存，能智能指针。
+	std::map<std::string, std::list<std::shared_ptr<LogAppender>>> *m_LogAppenderListMap; // LogAppender是虚基类，赋值时无法调用派生类的拷贝或移动函数，因此LogAppender*。同时因为满足第三种内存管理情况，为了方便管理内存，能智能指针。
 public:
 	LogEventManager();
 	~LogEventManager();
@@ -178,7 +186,7 @@ public:
 	LogEventManager& operator=(const LogEventManager& _value) = delete;
 	LogEventManager& operator=(LogEventManager&& _value) noexcept = delete;
 	
-	void clearLogEventNode(LogEventQueue* _node);
+	void clearLogEventNodeData(LogEventQueue* _node);
 	void clearLogEventQueue();
 
 	void clearLogAppenderListMap();
@@ -191,14 +199,6 @@ public:
 };
 
 
-// 创建全局的 defauleLogAppender
-std::shared_ptr<LogAppender> defauleLogAppender = std::make_shared<ConsoleLogAppender>();
-
-
-// 创建全局的 defauleLogEventManager （注意 LogEventManager 是个单例）
-LogEventManager defauleLogEventManager{};
-
-
 // 日志器
 class Logger
 {
@@ -207,7 +207,7 @@ private:
 	std::string m_loggername; 
 	LogLevel m_level;
 public:
-	Logger(const std::string& _loggername, LogLevel _level = LogLevel::debug, std::shared_ptr<LogAppender> _appender = defauleLogAppender);
+	Logger(const std::string& _loggername, LogLevel _level, std::shared_ptr<LogAppender> _appender);
 	~Logger() = default;   // LogAppender的释放交给LogEventManager
 
 	Logger(const Logger& _logger) = delete;
@@ -237,23 +237,23 @@ public:
 };
 
 
-
-// 创建全局的 defauleLogger
-Logger defauleLogger("defauleLogger");
-
-inline void debug(const char* _format, ...);   // 全局函数和变量会受到命名空间的约束，但宏不会
-inline void info(const char* _format, ...);
-inline void warn(const char* _format, ...);
-inline void error(const char* _format, ...);
-inline void fatal(const char* _format, ...);
+extern inline void debug(const char* _format, ...);   // 全局函数和变量会受到命名空间的约束，但宏不会
+extern inline void info(const char* _format, ...);
+extern inline void warn(const char* _format, ...);
+extern inline void error(const char* _format, ...);
+extern inline void fatal(const char* _format, ...);
 
 
 
 };
 
 };
+
+
+
 
 
 
 #endif // !_MOCHEN_LOG_H_
+
 

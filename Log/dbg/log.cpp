@@ -2,6 +2,21 @@
 
 using namespace mochen::log;
 
+// =============================================================================================================
+// 创建全局变量
+
+// 创建全局的 defauleLogEventManager （注意 LogEventManager 是个单例）
+LogEventManager defauleLogEventManager{};
+
+// 创建全局的 defauleLogAppender
+std::shared_ptr<LogAppender> defauleLogAppender = std::make_shared<ConsoleLogAppender>();
+
+// 声明全局的 defauleLogger
+Logger defauleLogger("defauleLogger", LogLevel::debug, defauleLogAppender);
+
+// 声明全局的 logLevelString
+const char* logLevelString[5] = { "debug","info","warn","error","fatal" };
+
 
 // =============================================================================================================
 // class LogAppender
@@ -100,6 +115,7 @@ void FileLogAppender::log(const char* _message)
 	}
 
 	fwrite(_message, strlen(_message), 1, m_fp);
+	fflush(m_fp);
 }
 
 void FileLogAppender::clear()
@@ -192,7 +208,7 @@ LogEventManager::LogEventManager() :
 	m_ptrRead = m_logEventQueue;
 	m_ptrDelete = m_logEventQueue;
 
-	m_LogAppenderListMap = new std::map<std::string, std::list<std::shared_ptr<LogAppender>>*>{};
+	m_LogAppenderListMap = new std::map<std::string, std::list<std::shared_ptr<LogAppender>>>{};
 }
 
 
@@ -202,27 +218,32 @@ LogEventManager::~LogEventManager()
 	m_thread.join();            // 等待处理完日志队列中所有数据
 	clearLogEventQueue();       
 	clearLogAppenderListMap();
+
+	printf("~LogEventManager\n");
+	_CrtDumpMemoryLeaks();   // 检测内存是否泄露  》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》
 }
 
 
 
-void LogEventManager::clearLogEventNode(LogEventQueue* _node)
+void LogEventManager::clearLogEventNodeData(LogEventQueue* _node)
 {
+	delete _node->m_data.m_loggername;
 	free(_node->m_data.m_content);        // 释放申请的资源
 	free(_node);
 }
 
 void LogEventManager::clearLogEventQueue()
 {
-	LogEventQueue* tempNode = nullptr;
+	LogEventQueue* tempNode = m_logEventQueue;
+	m_logEventQueue = m_logEventQueue->m_next;
+	free(tempNode);      // 先把哨兵节点销毁掉，因为哨兵节点中没有存数据，所以不能 free(m_data.m_content)
 
 	while (m_logEventQueue != nullptr) {
 		tempNode = m_logEventQueue;
 		m_logEventQueue = m_logEventQueue->m_next;
-
-		free(tempNode->m_data.m_content);  // 释放申请的资源
-		free(tempNode);
+		clearLogEventNodeData(tempNode);
 	}
+	m_logEventQueue = nullptr;
 }
 
 
@@ -230,10 +251,9 @@ void LogEventManager::clearLogAppenderListMap()
 {
 	for (auto mapIt = m_LogAppenderListMap->begin(); mapIt != m_LogAppenderListMap->end(); ++mapIt) {
 		// list = mapIt->second
-		for (auto vecterIt = mapIt->second->begin(); vecterIt != mapIt->second->end(); ++vecterIt) {
+		for (auto vecterIt = mapIt->second.begin(); vecterIt != mapIt->second.end(); ++vecterIt) {
 			vecterIt->reset();   // 释放智能指针
 		}
-		delete mapIt->second;
 	}
 	delete m_LogAppenderListMap;
 }
@@ -241,7 +261,7 @@ void LogEventManager::clearLogAppenderListMap()
 
 void LogEventManager::addAppender(std::string _loggername, std::shared_ptr<LogAppender> _appender)
 {
-	(*m_LogAppenderListMap)[_loggername]->push_back(_appender);
+	(*m_LogAppenderListMap)[_loggername].push_back(_appender);
 }
 
 
@@ -269,7 +289,7 @@ inline void LogEventManager::logFormatter(std::stringstream& _ss, LogEvent& _log
 
 	// [年-月-日 时:分:秒][日志器名称][日志等级][文件名]:[行号][日志信息]
 	_ss << "[" << timeString << "]";
-	_ss << "[" << _logEvent.m_loggername << "]";
+	_ss << "[" << *(_logEvent.m_loggername) << "]";
 	_ss << "[" << logLevelString[(int)_logEvent.m_LogLevel] << "]";
  	_ss << "[" << _logEvent.m_filename << "]:";
 	_ss << "[" << _logEvent.m_line << "]";
@@ -294,7 +314,7 @@ void LogEventManager::dealLogEvent_threadFuntion()
 			m_ptrRead = m_ptrRead->m_next;
 
 			tempData = tempNode->m_data;
-			tempList = (*m_LogAppenderListMap)[tempData.m_loggername];
+			tempList = &(*m_LogAppenderListMap)[*(tempData.m_loggername)];
 
 			for(auto it = tempList->begin(); it != tempList->end(); ++it) {  // 或者用 (*(*it)).getType();
 				logFormatter(ss, tempData);    
@@ -306,7 +326,7 @@ void LogEventManager::dealLogEvent_threadFuntion()
 				tempNode = m_ptrDelete->m_next;
 				tempNode->m_prev->m_next = tempNode->m_next;
 				tempNode->m_next->m_prev = tempNode->m_prev;
-				clearLogEventNode(tempNode);
+				clearLogEventNodeData(tempNode);
 			}
 			
 		}
@@ -327,7 +347,6 @@ void LogEventManager::addLogEvent(LogEvent _logEvent)
 	m_ptrWrite->m_next->m_data = _logEvent;
 
 	m_ptrWrite = m_ptrWrite->m_next;
-	++m_ptrWrite;
 
 	m_mutex.unlock();
 }
@@ -346,6 +365,8 @@ Logger::Logger(const std::string& _loggername, LogLevel _level, std::shared_ptr<
 
 	m_loggername = _loggername;
 	defauleLogEventManager.addAppender(_loggername, _appender);
+
+	return; /// 
 }
 
 
@@ -360,7 +381,7 @@ void Logger::log(LogLevel _level, const char* _format, va_list _args)
 
 	LogEvent data;
 	data.m_timestamp = time(nullptr);
-	data.m_loggername = m_loggername;
+	data.m_loggername = new std::string(m_loggername);
 	data.m_LogLevel = m_level;
 	data.m_filename = __FILE__;
 	data.m_line = __LINE__;
@@ -462,7 +483,8 @@ inline void Logger::setLogLevel(LogLevel _level)
 // =============================================================================================================
 // 全局的函数模块
 
-inline void debug(const char* _format, ...)
+// 注意全局函数在实现时，也要加命名空间
+inline void mochen::log::debug(const char* _format, ...)
 {
 	if ((int)defauleLogger.getLogLevel() > (int)LogLevel::debug) {
 		return;
@@ -473,7 +495,7 @@ inline void debug(const char* _format, ...)
 	va_end(args);
 }
 
-inline void info(const char* _format, ...)
+inline void mochen::log::info(const char* _format, ...)
 {
 	if ((int)defauleLogger.getLogLevel() > (int)LogLevel::info) {
 		return;
@@ -484,7 +506,7 @@ inline void info(const char* _format, ...)
 	va_end(args);
 }
 
-inline void warn(const char* _format, ...)
+inline void mochen::log::warn(const char* _format, ...)
 {
 	if ((int)defauleLogger.getLogLevel() > (int)LogLevel::warn) {
 		return;
@@ -495,7 +517,7 @@ inline void warn(const char* _format, ...)
 	va_end(args);
 }
 
-inline void error(const char* _format, ...)
+inline void mochen::log::error(const char* _format, ...)
 {
 	if ((int)defauleLogger.getLogLevel() > (int)LogLevel::error) {
 		return;
@@ -506,7 +528,7 @@ inline void error(const char* _format, ...)
 	va_end(args);
 }
 
-inline void fatal(const char* _format, ...)
+inline void mochen::log::fatal(const char* _format, ...)
 {
 	if ((int)defauleLogger.getLogLevel() > (int)LogLevel::fatal) {
 		return;
@@ -516,3 +538,8 @@ inline void fatal(const char* _format, ...)
 	defauleLogger.log(LogLevel::fatal, _format, args);
 	va_end(args);
 }
+
+
+
+
+

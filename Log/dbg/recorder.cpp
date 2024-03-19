@@ -13,6 +13,8 @@ MemoryRecorder::MemoryRecorder()
 
 MemoryRecorder::~MemoryRecorder()
 {
+	printf("~MemoryRecorder\n"); // 》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》
+
 	_CrtMemCheckpoint(&m_endMemState);     // 获取结束时内存的使用状态
 	if (_CrtMemDifference(&m_differenceMemState, &m_startMemState, &m_endMemState) == true) {
 		printf("程序结束：内存泄露了\n");    // !@#@!#@!#!#!@#@!@#!!#!#@!#
