@@ -32,7 +32,7 @@ void test01()
 	logger_error(Logger01, "test error %s", "asdsad");
 	logger_fatal(Logger01, "test fatal %d %s %lf", 10, "sads", 0.343);
 
-	default_fatal("test debug");
+	default_debug("test debug");
 	default_info("test info %d", 1123);
 	default_warn("test warn %lf", 1.123213);
 	default_error("test error %s", "asdsad");
@@ -114,10 +114,10 @@ void test04()
 
 int main()
 {
-	// test01();
-	// test02();
-	// test03();
-	test04();
+	test01();    // 测试默认Logger 和自定义Logger
+	// test02(); // 测试文件写入
+	// test03(); // 测试运行效率
+	// test04(); // 测试多线程下的线程安全性
 	
 	for (int i = 0; i < 100; ++i) {
 		default_debug("main => %d", i);

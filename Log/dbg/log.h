@@ -22,13 +22,16 @@
 * 4.如果有项目要使用，该日志库，请把该日志库包含在.cpp文件中，同时创建一个全局变量。如果想要暴露该全局变量，
 *   则可以再在相应的头文件中声明该全局变量。
 * 5.要配合配置系统保存当前使用的文件名，才能实现续写功能，不然一旦文件满了，每次启动程序都会发生文件滚动。
+* 6.为了多线程下的安全性和输出的日志的稳定性，目前不支持根据loggername查找或删除logaddender
+* 
 */
 
 
 
 
 /*// 还未解决的问题
-* 1.
+* 1. 
+* 
 * 
 */
 
@@ -79,27 +82,17 @@ enum class LogLevel
 class LogAppender
 {
 public:
-	enum class Type
-	{
-		withoutLogAppender = 0,
-		ConsoleLogAppender,
-		FileLogAppender
-	};
-protected:
-	Type m_type;
-public:
-	LogAppender();
+	LogAppender() = default;
 	virtual ~LogAppender() {}                    // 虚析构函数需要实现函数的定义，如果只写函数说明，可能出现链接错误
 
 	virtual void log(const char* _massage) = 0;  // 纯虚函数
-	inline Type getType();
 };
 
 
 class ConsoleLogAppender : public LogAppender
 {
 public:
-	ConsoleLogAppender(LogLevel _level = LogLevel::debug);
+	ConsoleLogAppender() = default;
 
 	void log(const char* _massage) override;
 };
@@ -117,7 +110,7 @@ private:
 #define M_FILEMAXSIZE 409600
 public:
 	FileLogAppender();
-	FileLogAppender(const std::string& _filename, int _maxSize = M_FILEMAXSIZE, LogLevel _level = LogLevel::debug);
+	FileLogAppender(const std::string& _filename, int _maxSize = M_FILEMAXSIZE);
 	~FileLogAppender();
 
 	FileLogAppender(const FileLogAppender& _value) = delete;  // 不能拷贝，因为实现滚动机制时要改变文件名。

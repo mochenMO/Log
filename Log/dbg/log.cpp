@@ -38,27 +38,9 @@ const char* logLevelString[5] = { "debug","info","warn","error","fatal" };
 // =============================================================================================================
 // class LogAppender
 
-LogAppender::LogAppender() : m_type(Type::withoutLogAppender)
-{    
-
-}
-
-
-inline LogAppender::Type LogAppender::getType()
-{
-	return m_type;
-}
-
-
-
 
 // =============================================================================================================
 // class ConsoleLogAppender
-
-ConsoleLogAppender::ConsoleLogAppender(LogLevel _level)
-{
-	m_type = Type::ConsoleLogAppender;
-}
 
 void ConsoleLogAppender::log(const char* _massage)
 {
@@ -71,16 +53,14 @@ void ConsoleLogAppender::log(const char* _massage)
 
 FileLogAppender::FileLogAppender()
 {
-	m_type = Type::FileLogAppender;
 	m_filename = "";
 	m_fp = nullptr;
 	m_maxSize = M_FILEMAXSIZE;
 }
 
 
-FileLogAppender::FileLogAppender(const std::string& _filename, int _maxSize, LogLevel _level)
+FileLogAppender::FileLogAppender(const std::string& _filename, int _maxSize)
 {
-	m_type = Type::FileLogAppender;
 	m_maxSize = _maxSize;
 	m_filename = _filename;
 
