@@ -3,16 +3,33 @@
 using namespace mochen::log;
 
 // =============================================================================================================
-// 创建全局变量
+// 全局区
 
 // 创建全局的 defauleLogEventManager （注意 LogEventManager 是个单例）
 LogEventManager defauleLogEventManager{};
 
-// 创建全局的 defauleLogAppender
+// 全局函数
 std::shared_ptr<LogAppender> defauleLogAppender = std::make_shared<ConsoleLogAppender>();
 
-// 声明全局的 defauleLogger
-Logger defauleLogger("defauleLogger", LogLevel::debug, defauleLogAppender);
+inline std::shared_ptr<LogAppender>* mochen::log::getDefaultLogAppender() 
+{
+	// static std::shared_ptr<LogAppender> defauleLogAppender = std::make_shared<ConsoleLogAppender>();
+	// 注意不用static的是因为，在多线程中同时创建static的是有的风险的。
+	return &defauleLogAppender;
+}
+
+
+// 全局函数
+Logger defauleLogger("defauleLogger", LogLevel::debug, (*getDefaultLogAppender()));
+
+inline Logger* mochen::log::getDefaultLogger()
+{
+	// static Logger defauleLogger("defauleLogger", LogLevel::debug, (*getDefaultLogAppender()));
+	// 注意不用static的是因为，在多线程中同时创建static的是有的风险的。
+	return &defauleLogger;
+}
+
+
 
 // 声明全局的 logLevelString
 const char* logLevelString[5] = { "debug","info","warn","error","fatal" };
@@ -370,93 +387,117 @@ Logger::Logger(const std::string& _loggername, LogLevel _level, std::shared_ptr<
 }
 
 
-void Logger::log(LogLevel _level, const char* _format, va_list _args)
+//void Logger::log(LogLevel _level, const char* _format, va_list _args)
+//{
+//	if ((int)m_level > (int)_level) {
+//		return;
+//	}
+//	int size = vsnprintf(nullptr, 0, _format, _args);
+//	char* buffer = (char*)malloc(sizeof(char) * (size + 1));    // +1保存结尾的"\0"
+//	vsprintf(buffer, _format, _args);
+//
+//	LogEvent data;
+//	data.m_timestamp = time(nullptr);
+//	data.m_loggername = new std::string(m_loggername);
+//	data.m_LogLevel = m_level;
+//	data.m_filename = __FILE__;
+//	data.m_line = __LINE__;
+//	data.m_content = buffer;
+//
+//	defauleLogEventManager.addLogEvent(data);
+//}
+//
+//
+//void Logger::log(LogLevel _level, const char* _format, ...)
+//{
+//	if ((int)m_level > (int)_level) {
+//		return;
+//	}
+//	va_list args;
+//	va_start(args, _format);
+//	log(_level, _format, args);
+//	va_end(args);
+//}
+//
+//void Logger::debug(const char* _format, ...)
+//{
+//	if ((int)m_level > (int)LogLevel::debug) {
+//		return;
+//	}
+//	va_list args;
+//	va_start(args, _format);
+//	log(LogLevel::debug, _format, args);
+//	va_end(args);
+//}
+//
+//void Logger::info(const char* _format, ...)
+//{
+//	if ((int)m_level > (int)LogLevel::info) {
+//		return;
+//	}
+//	va_list args;
+//	va_start(args, _format);
+//	log(LogLevel::info, _format, args);
+//	va_end(args);
+//}
+//
+//void Logger::warn(const char* _format, ...)
+//{
+//	if ((int)m_level > (int)LogLevel::warn) {
+//		return;
+//	}
+//	va_list args;
+//	va_start(args, _format);
+//	log(LogLevel::warn, _format, args);
+//	va_end(args);
+//}
+//
+//void Logger::error(const char* _format, ...)
+//{
+//	if ((int)m_level > (int)LogLevel::error) {
+//		return;
+//	}
+//	va_list args;
+//	va_start(args, _format);
+//	log(LogLevel::error, _format, args);
+//	va_end(args);
+//}
+//
+//void Logger::fatal(const char* _format, ...)
+//{
+//	if ((int)m_level > (int)LogLevel::fatal) {
+//		return;
+//	}
+//	va_list args;
+//	va_start(args, _format);
+//	log(LogLevel::fatal, _format, args);
+//	va_end(args);
+//}
+
+
+void Logger::log(LogLevel _level, const char* _filename, int _line, const char* _format, ...)
 {
 	if ((int)m_level > (int)_level) {
 		return;
 	}
-	int size = vsnprintf(nullptr, 0, _format, _args);
+
+	va_list args;
+	va_start(args, _format);
+	int size = vsnprintf(nullptr, 0, _format, args);
 	char* buffer = (char*)malloc(sizeof(char) * (size + 1));    // +1保存结尾的"\0"
-	vsprintf(buffer, _format, _args);
+	vsprintf(buffer, _format, args);
+	va_end(args);
 
 	LogEvent data;
 	data.m_timestamp = time(nullptr);
 	data.m_loggername = new std::string(m_loggername);
 	data.m_LogLevel = m_level;
-	data.m_filename = __FILE__;
-	data.m_line = __LINE__;
+	data.m_filename = _filename;
+	data.m_line = _line;
 	data.m_content = buffer;
 
 	defauleLogEventManager.addLogEvent(data);
 }
-
-
-void Logger::log(LogLevel _level, const char* _format, ...)
-{
-	if ((int)m_level > (int)_level) {
-		return;
-	}
-	va_list args;
-	va_start(args, _format);
-	log(_level, _format, args);
-	va_end(args);
-}
-
-void Logger::debug(const char* _format, ...)
-{
-	if ((int)m_level > (int)LogLevel::debug) {
-		return;
-	}
-	va_list args;
-	va_start(args, _format);
-	log(LogLevel::debug, _format, args);
-	va_end(args);
-}
-
-void Logger::info(const char* _format, ...)
-{
-	if ((int)m_level > (int)LogLevel::info) {
-		return;
-	}
-	va_list args;
-	va_start(args, _format);
-	log(LogLevel::info, _format, args);
-	va_end(args);
-}
-
-void Logger::warn(const char* _format, ...)
-{
-	if ((int)m_level > (int)LogLevel::warn) {
-		return;
-	}
-	va_list args;
-	va_start(args, _format);
-	log(LogLevel::warn, _format, args);
-	va_end(args);
-}
-
-void Logger::error(const char* _format, ...)
-{
-	if ((int)m_level > (int)LogLevel::error) {
-		return;
-	}
-	va_list args;
-	va_start(args, _format);
-	log(LogLevel::error, _format, args);
-	va_end(args);
-}
-
-void Logger::fatal(const char* _format, ...)
-{
-	if ((int)m_level > (int)LogLevel::fatal) {
-		return;
-	}
-	va_list args;
-	va_start(args, _format);
-	log(LogLevel::fatal, _format, args);
-	va_end(args);
-}
-
 
 inline std::string Logger::getLoggerName()
 {
@@ -484,60 +525,60 @@ inline void Logger::setLogLevel(LogLevel _level)
 // 全局的函数模块
 
 // 注意全局函数在实现时，也要加命名空间
-inline void mochen::log::debug(const char* _format, ...)
-{
-	if ((int)defauleLogger.getLogLevel() > (int)LogLevel::debug) {
-		return;
-	}
-	va_list args;
-	va_start(args, _format);
-	defauleLogger.log(LogLevel::debug, _format, args);
-	va_end(args);
-}
-
-inline void mochen::log::info(const char* _format, ...)
-{
-	if ((int)defauleLogger.getLogLevel() > (int)LogLevel::info) {
-		return;
-	}
-	va_list args;
-	va_start(args, _format);
-	defauleLogger.log(LogLevel::info, _format, args);
-	va_end(args);
-}
-
-inline void mochen::log::warn(const char* _format, ...)
-{
-	if ((int)defauleLogger.getLogLevel() > (int)LogLevel::warn) {
-		return;
-	}
-	va_list args;
-	va_start(args, _format);
-	defauleLogger.log(LogLevel::warn, _format, args);
-	va_end(args);
-}
-
-inline void mochen::log::error(const char* _format, ...)
-{
-	if ((int)defauleLogger.getLogLevel() > (int)LogLevel::error) {
-		return;
-	}
-	va_list args;
-	va_start(args, _format);
-	defauleLogger.log(LogLevel::error, _format, args);
-	va_end(args);
-}
-
-inline void mochen::log::fatal(const char* _format, ...)
-{
-	if ((int)defauleLogger.getLogLevel() > (int)LogLevel::fatal) {
-		return;
-	}
-	va_list args;
-	va_start(args, _format);
-	defauleLogger.log(LogLevel::fatal, _format, args);
-	va_end(args);
-}
+//inline void mochen::log::debug(const char* _format, ...)
+//{
+//	if ((int)defauleLogger.getLogLevel() > (int)LogLevel::debug) {
+//		return;
+//	}
+//	va_list args;
+//	va_start(args, _format);
+//	defauleLogger.log(LogLevel::debug, _format, args);
+//	va_end(args);
+//}
+//
+//inline void mochen::log::info(const char* _format, ...)
+//{
+//	if ((int)defauleLogger.getLogLevel() > (int)LogLevel::info) {
+//		return;
+//	}
+//	va_list args;
+//	va_start(args, _format);
+//	defauleLogger.log(LogLevel::info, _format, args);
+//	va_end(args);
+//}
+//
+//inline void mochen::log::warn(const char* _format, ...)
+//{
+//	if ((int)defauleLogger.getLogLevel() > (int)LogLevel::warn) {
+//		return;
+//	}
+//	va_list args;
+//	va_start(args, _format);
+//	defauleLogger.log(LogLevel::warn, _format, args);
+//	va_end(args);
+//}
+//
+//inline void mochen::log::error(const char* _format, ...)
+//{
+//	if ((int)defauleLogger.getLogLevel() > (int)LogLevel::error) {
+//		return;
+//	}
+//	va_list args;
+//	va_start(args, _format);
+//	defauleLogger.log(LogLevel::error, _format, args);
+//	va_end(args);
+//}
+//
+//inline void mochen::log::fatal(const char* _format, ...)
+//{
+//	if ((int)defauleLogger.getLogLevel() > (int)LogLevel::fatal) {
+//		return;
+//	}
+//	va_list args;
+//	va_start(args, _format);
+//	defauleLogger.log(LogLevel::fatal, _format, args);
+//	va_end(args);
+//}
 
 
 

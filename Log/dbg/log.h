@@ -30,6 +30,24 @@
 * 2.STL存虚基类时，因为无法调用派生类的拷贝或移动函数，因此存虚基类的指针。
 * 3.智能指针通常以值类型作为参数类型
 * 4.全局函数和变量会受到命名空间的约束，但宏不会
+* 5.如何正确创建全局变量：
+*	(1).直接在cpp文件中定义并创建，缺点由于不在头文件中，故其他文件无法使用该全局变量
+*   (2).现在h文件中声明，再在cpp文件中定义，缺点比较麻烦，且用户直接操作全局变量风险
+*   (3).现在h文件中声明声明全局函数返回全局变量的指针(避免调用拷贝或移动相关函数),再在cpp文件中定义。
+*		.h
+*		extren inline std::shared_ptr<LogAppender>* mochen::log::getDefaultLogAppender() 
+* 
+		.cpp
+		std::shared_ptr<LogAppender> defauleLogAppender = std::make_shared<ConsoleLogAppender>();
+
+		inline std::shared_ptr<LogAppender>* mochen::log::getDefaultLogAppender() 
+		{
+			// static std::shared_ptr<LogAppender> defauleLogAppender = std::make_shared<ConsoleLogAppender>();
+			// 注意不用static的是因为，在多线程中同时创建static的是有的风险的。
+			return &defauleLogAppender;
+		}
+*
+* 6.因为宏函数要在其他文件中展开，所以函数中所有用到的函数或者变量，都要加上完整的命名空间名
 * 
 * 
 * 
@@ -101,6 +119,8 @@ public:
 	void log(const char* _massage) override;
 };
 
+// 声明全局函数，代替在头文件中声明全局变量，且返回的指针类型，避免调用拷贝或移动相关函数
+extern inline std::shared_ptr<LogAppender>* getDefaultLogAppender();
 
 
 class FileLogAppender : public LogAppender
@@ -134,9 +154,6 @@ public:
 // 日志事件
 struct LogEvent
 {
-
-
-
 	time_t	     m_timestamp;
 	std::string *m_loggername; // 申请内存了需要手动释放 
 	LogLevel     m_LogLevel;
@@ -207,7 +224,7 @@ private:
 	std::string m_loggername; 
 	LogLevel m_level;
 public:
-	Logger(const std::string& _loggername, LogLevel _level, std::shared_ptr<LogAppender> _appender);
+	Logger(const std::string& _loggername, LogLevel _level = LogLevel::debug, std::shared_ptr<LogAppender> _appender = (*getDefaultLogAppender()));
 	~Logger() = default;   // LogAppender的释放交给LogEventManager
 
 	Logger(const Logger& _logger) = delete;
@@ -216,14 +233,14 @@ public:
 	Logger& operator=(const Logger& _logger) = delete;
 	Logger& operator=(Logger&& _logger) noexcept = delete;
 
-	void log(LogLevel _level, const char* _format, va_list _args);
-	void log(LogLevel _level, const char* _format, ...);
-	void debug(const char* _format, ...);
-	void info(const char* _format, ...);
-	void warn(const char* _format, ...);
-	void error(const char* _format, ...);
-	void fatal(const char* _format, ...);
-
+	//void log(LogLevel _level, const char* _format, va_list _args);
+	//void log(LogLevel _level, const char* _format, ...);
+	//void debug(const char* _format, ...);
+	//void info(const char* _format, ...);
+	//void warn(const char* _format, ...);
+	//void error(const char* _format, ...);
+	//void fatal(const char* _format, ...);
+	void log(LogLevel _level,const char* _filename, int _line, const char* _format, ...);
 
 
 	// inline void setLoggerName(const std::string _loggerName);    // 禁止用户改 loggerName
@@ -236,12 +253,41 @@ public:
 	inline void setLogLevel(LogLevel _level);
 };
 
+// 声明全局函数，代替在头文件中声明全局变量，且返回的指针类型，避免调用拷贝或移动相关函数
+extern inline Logger* getDefaultLogger();
 
-extern inline void debug(const char* _format, ...);   // 全局函数和变量会受到命名空间的约束，但宏不会
-extern inline void info(const char* _format, ...);
-extern inline void warn(const char* _format, ...);
-extern inline void error(const char* _format, ...);
-extern inline void fatal(const char* _format, ...);
+
+// 注意因为宏函数要在其他文件中展开，所以函数中所有用到的函数或者变量，都要加上完整的命名空间名
+#define default_debug(_format, ...) \
+	mochen::log::getDefaultLogger()->log(mochen::log::LogLevel::debug, __FILE__, __LINE__, _format, ##__VA_ARGS__)
+
+#define default_info(_format, ...) \
+	mochen::log::getDefaultLogger()->log(mochen::log::LogLevel::info, __FILE__, __LINE__, _format, ##__VA_ARGS__)
+
+#define default_warn(_format, ...) \
+	mochen::log::getDefaultLogger()->log(mochen::log::LogLevel::warn, __FILE__, __LINE__, _format, ##__VA_ARGS__)
+
+#define default_error(_format, ...) \
+	mochen::log::getDefaultLogger()->log(mochen::log::LogLevel::error, __FILE__, __LINE__, _format, ##__VA_ARGS__)
+
+#define default_fatal(_format, ...) \
+	mochen::log::getDefaultLogger()->log(mochen::log::LogLevel::fatal, __FILE__, __LINE__, _format, ##__VA_ARGS__)
+
+
+#define logger_debug(logger, _format, ...) \
+	logger.log(mochen::log::LogLevel::debug, __FILE__, __LINE__, _format, ##__VA_ARGS__)
+
+#define logger_info(logger, _format, ...) \
+	logger.log(mochen::log::LogLevel::info, __FILE__, __LINE__, _format, ##__VA_ARGS__)
+
+#define logger_warn(logger, _format, ...) \
+	logger.log(mochen::log::LogLevel::warn, __FILE__, __LINE__, _format, ##__VA_ARGS__)
+
+#define logger_error(logger, _format, ...) \
+	logger.log(mochen::log::LogLevel::error, __FILE__, __LINE__, _format, ##__VA_ARGS__)
+
+#define logger_fatal(logger, _format, ...) \
+	logger.log(mochen::log::LogLevel::fatal, __FILE__, __LINE__, _format, ##__VA_ARGS__)
 
 
 
