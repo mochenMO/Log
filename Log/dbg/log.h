@@ -25,7 +25,17 @@
 * 6.为了多线程下的安全性和输出的日志的稳定性，目前不支持根据loggername查找或删除logaddender
 * 7.日志输出格式：[年-月-日 时:分:秒][日志器名称][日志等级][文件名]:[行号][日志信息]
 * 8.文件滚动的命名格式：文件名_log_0000-00-00#00-00-00.txt
-* 
+* 9.日志信息的描述格式：错误类型: 对该问题的描述可以<变量名>更详细的描述该问题
+*	常用的错误类型如下:
+*		index out of range		下标越界
+*		value out of range      数值越界
+*		valid key               无效键值
+*		null pointer            指针为空 
+*		null [data]             数据为空
+*		open [file] failed      打开文件失败
+*		[data] type error       数据类型错误
+*	    [data] must be unique   数据必须唯一
+*
 */
 
 

@@ -68,7 +68,7 @@ FileLogAppender::FileLogAppender(const std::string& _filename, int _maxSize)
 	temp += ".txt";
 
 	if ((m_fp = fopen(temp.c_str(), "a")) == nullptr) {
-		throw std::logic_error("filded to open the file");    // std::logic_error异常对象中会自动包含文件名和行号等调试信息
+		throw std::logic_error("open file filded");    // std::logic_error异常对象中会自动包含文件名和行号等调试信息
 	}
 }
 
@@ -104,7 +104,7 @@ void FileLogAppender::operator=(FileLogAppender&& _value) noexcept
 void FileLogAppender::log(const char* _message)
 {
 	if (m_fp == nullptr) {
-		throw std::logic_error("There is no initialization m_file, m_file is nullptr");
+		throw std::logic_error("null pointer: <m_fp> is nullptr");
 	}
 
 	if (getFileSize() >= m_maxSize) {
@@ -133,7 +133,7 @@ void FileLogAppender::open(const std::string& _filename)
 	temp += ".txt";
 
 	if ((m_fp = fopen(temp.c_str(), "a")) == nullptr) {
-		throw std::logic_error("filded to open the file");    // std::logic_error异常对象中会自动包含文件名和行号等调试信息
+		throw std::logic_error("open file filded");    // std::logic_error异常对象中会自动包含文件名和行号等调试信息
 	}
 }
 
@@ -165,7 +165,7 @@ void FileLogAppender::scrolling()
 		m_fp = nullptr;
 	}
 	else {
-		throw std::logic_error("There is no initialization m_file, m_file is nullptr");
+		throw std::logic_error("null pointer: <m_fp> is nullptr");
 	}
 
 	std::string temp = m_filename;
@@ -189,7 +189,7 @@ void FileLogAppender::scrolling()
 	temp += ".txt";
 
 	if ((m_fp = fopen(temp.c_str(), "a")) == nullptr) {
-		throw std::logic_error("filded to open the file");    // std::logic_error异常对象中会自动包含文件名和行号等调试信息
+		throw std::logic_error("open file failded");    // std::logic_error异常对象中会自动包含文件名和行号等调试信息
 	}
 }
 
@@ -360,7 +360,7 @@ void LogEventManager::addLogEvent(LogEvent _logEvent)
 Logger::Logger(const std::string& _loggername, LogLevel _level, std::shared_ptr<LogAppender> _appender)
 {
 	if (defauleLogEventManager.isFindLogger(_loggername) == true) {
-		throw std::logic_error("The _loggername already exists");
+		throw std::logic_error("loggername must be unqiue: <_loggername> is already exists");
 	}
 	
 	m_level = _level;
