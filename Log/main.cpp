@@ -117,7 +117,7 @@ int main()
 	// test01();
 	// test02();
 	// test03();
-	// test04();
+	test04();
 	
 	for (int i = 0; i < 100; ++i) {
 		default_debug("main => %d", i);

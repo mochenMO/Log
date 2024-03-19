@@ -169,7 +169,7 @@ inline int FileLogAppender::getFileSize()
 	int size = 0;
 	fseek(m_fp, 0, SEEK_END);    // 移动文件指针到文件结尾
 	size = ftell(m_fp);          // 获取当前文件指针的位置，即文件大小，单位字节
-	fseek(m_fp, 0, SEEK_SET);    // 移动文件指针到文件开头  ？？？？？？？？？？？？？？？？？
+	fseek(m_fp, 0, SEEK_SET);    // 移动文件指针到文件开头
 	return size;
 }
 
@@ -241,8 +241,8 @@ LogEventManager::~LogEventManager()
 	clearLogEventQueue();       
 	clearLogAppenderListMap();
 
-	printf("~LogEventManager\n");
-	_CrtDumpMemoryLeaks();   // 检测内存是否泄露  》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》》
+	printf("~LogEventManager\n");  // LogEventManager应该是最后一个析构的
+	_CrtDumpMemoryLeaks();         // 检测内存是否泄露
 }
 
 
@@ -388,96 +388,8 @@ Logger::Logger(const std::string& _loggername, LogLevel _level, std::shared_ptr<
 	m_loggername = _loggername;
 	defauleLogEventManager.addAppender(_loggername, _appender);
 
-	return; /// 
+	return;
 }
-
-
-//void Logger::log(LogLevel _level, const char* _format, va_list _args)
-//{
-//	if ((int)m_level > (int)_level) {
-//		return;
-//	}
-//	int size = vsnprintf(nullptr, 0, _format, _args);
-//	char* buffer = (char*)malloc(sizeof(char) * (size + 1));    // +1保存结尾的"\0"
-//	vsprintf(buffer, _format, _args);
-//
-//	LogEvent data;
-//	data.m_timestamp = time(nullptr);
-//	data.m_loggername = new std::string(m_loggername);
-//	data.m_LogLevel = m_level;
-//	data.m_filename = __FILE__;
-//	data.m_line = __LINE__;
-//	data.m_content = buffer;
-//
-//	defauleLogEventManager.addLogEvent(data);
-//}
-//
-//
-//void Logger::log(LogLevel _level, const char* _format, ...)
-//{
-//	if ((int)m_level > (int)_level) {
-//		return;
-//	}
-//	va_list args;
-//	va_start(args, _format);
-//	log(_level, _format, args);
-//	va_end(args);
-//}
-//
-//void Logger::debug(const char* _format, ...)
-//{
-//	if ((int)m_level > (int)LogLevel::debug) {
-//		return;
-//	}
-//	va_list args;
-//	va_start(args, _format);
-//	log(LogLevel::debug, _format, args);
-//	va_end(args);
-//}
-//
-//void Logger::info(const char* _format, ...)
-//{
-//	if ((int)m_level > (int)LogLevel::info) {
-//		return;
-//	}
-//	va_list args;
-//	va_start(args, _format);
-//	log(LogLevel::info, _format, args);
-//	va_end(args);
-//}
-//
-//void Logger::warn(const char* _format, ...)
-//{
-//	if ((int)m_level > (int)LogLevel::warn) {
-//		return;
-//	}
-//	va_list args;
-//	va_start(args, _format);
-//	log(LogLevel::warn, _format, args);
-//	va_end(args);
-//}
-//
-//void Logger::error(const char* _format, ...)
-//{
-//	if ((int)m_level > (int)LogLevel::error) {
-//		return;
-//	}
-//	va_list args;
-//	va_start(args, _format);
-//	log(LogLevel::error, _format, args);
-//	va_end(args);
-//}
-//
-//void Logger::fatal(const char* _format, ...)
-//{
-//	if ((int)m_level > (int)LogLevel::fatal) {
-//		return;
-//	}
-//	va_list args;
-//	va_start(args, _format);
-//	log(LogLevel::fatal, _format, args);
-//	va_end(args);
-//}
 
 
 void Logger::log(LogLevel _level, const char* _filename, int _line, const char* _format, ...)
