@@ -101,12 +101,12 @@ void test04()
 	std::thread t05(&threadFunctionFile, "thread05", "test02");
 	std::thread t06(&threadFunctionFile, "thread06", "test03");
 
-	t01.detach();
-	t02.detach();
-	t03.detach();
-	t04.detach();
-	t05.detach();
-	t06.detach();
+	t01.join();
+	t02.join();
+	t03.join();
+	t04.join();
+	t05.join();
+	t06.join();
 }
 
 

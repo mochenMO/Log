@@ -1,55 +1,40 @@
+/*// 介绍与说明
+* 1.该日志系统的工作模式
+* 
+*		                 +--------------+
+*		线程1 ---------->|              |   LogEventManager异步线程    
+*		线程2 ---------->|  锁(限制写入) | -------------------------->
+*		线程n ---------->|              |
+*		                 +--------------+
+* 
+* 2.LogEventManager中三个LogEventQueue指针实现无锁结构处理数据
+*	(1).LogEventQueue是用自定义的双向链表实现的。
+*   (2).read,write,delete 三个指针对应三种操作，这三种操作按先后顺序依次进行，先write后read再delete，
+*	    且 read 可以等于 write, delete = read->prev，彼此之间不会冲突。
+*   
+*		 delete             read               write
+*		   |                 |                   |
+*		+--+--+       +------+-----+      +------+-----+ 
+*		| ... | <---->| LogEvent01 |<---->| LogEvent02 | ----> nullptr 
+*		+-----+       +------------+      +------------+ 
+* 
+* 3.注意Logger的Loggername是具有唯一性的，程序会维护该特性。
+* 4.如果有项目要使用，该日志库，请把该日志库包含在.cpp文件中，同时创建一个全局变量。如果想要暴露该全局变量，
+*   则可以再在相应的头文件中声明该全局变量。
+* 5.要配合配置系统保存当前使用的文件名，才能实现续写功能，不然一旦文件满了，每次启动程序都会发生文件滚动。
+*/
+
+
+
 
 /*// 还未解决的问题
-* 1.throw std::logic_error("type error, not int value");
-* 2.日志的滚动机制，要配合配置系统保存当前使用的文件名，才能实现续写功能！！！
-* 3.void addAppender(std::string _loggername, std::shared_ptr<LogAppender> _appender);   // 注意建议在创建线程之前用该函数，以免造成冲突的情况
-*
+* 1.
+* 
 */
 
 
 /*// 所学到的知识
-* 1.C++的抛出异常，和处理异常的方法：
-* 
-		void checkIntValue(int value) {
-			if (value != static_cast<int>(value)) {
-				throw std::logic_error("type error, not int value");   // std::logic_error异常对象中会自动包含文件名和行号等调试信息
-			}
-		}
-		
-		int main() {
-			try {
-				checkIntValue(10); // 正确的整数值
-				checkIntValue(10.5); // 非整数值，会抛出异常
-			} catch (const std::logic_error& e) {
-				 std::cerr << "Exception caught at file " << __FILE__ << " line " << __LINE__ << ": " << e.what() << std::endl;
-			}
-		
-			return 0;
-		}
-* 
-* 2.STL存虚基类时，因为无法调用派生类的拷贝或移动函数，因此存虚基类的指针。
-* 3.智能指针通常以值类型作为参数类型
-* 4.全局函数和变量会受到命名空间的约束，但宏不会
-* 5.如何正确创建全局变量：
-*	(1).直接在cpp文件中定义并创建，缺点由于不在头文件中，故其他文件无法使用该全局变量
-*   (2).现在h文件中声明，再在cpp文件中定义，缺点比较麻烦，且用户直接操作全局变量风险
-*   (3).现在h文件中声明声明全局函数返回全局变量的指针(避免调用拷贝或移动相关函数),再在cpp文件中定义。
-*		.h
-*		extren inline std::shared_ptr<LogAppender>* mochen::log::getDefaultLogAppender() 
-* 
-		.cpp
-		std::shared_ptr<LogAppender> defauleLogAppender = std::make_shared<ConsoleLogAppender>();
-
-		inline std::shared_ptr<LogAppender>* mochen::log::getDefaultLogAppender() 
-		{
-			// static std::shared_ptr<LogAppender> defauleLogAppender = std::make_shared<ConsoleLogAppender>();
-			// 注意不用static的是因为，在多线程中同时创建static的是有的风险的。
-			return &defauleLogAppender;
-		}
-*
-* 6.因为宏函数要在其他文件中展开，所以函数中所有用到的函数或者变量，都要加上完整的命名空间名
-* 
-* 
+* 1.
 * 
 */
 
@@ -148,6 +133,7 @@ public:
 	inline std::string getFilename();
 
 	inline int getFileSize();
+	inline void setFileSize(int _size);
 	void scrolling();   // 日志的滚动机制，要配合配置系统保存当前使用的文件名，才能实现续写功能！！！
 };
 
@@ -161,17 +147,6 @@ struct LogEvent
 	const char  *m_filename;  
 	int		     m_line;
 	char        *m_content;    // 申请内存了需要手动释放 
-	// std::list<std::shared_ptr<LogAppender>> *m_appenderList;    // 错误，因为logger会在LogEventManager之前销毁，该变量会无效。
-
-	//LogEvent(const LogEvent& _logEvent) {
-	//	m_timestamp = _logEvent.m_timestamp;
-	//	m_timestamp = _logEvent.m_timestamp;
-	//	m_line = _logEvent.m_line;
-	//	m_filename = _logEvent.m_filename;
-	//	m_content = _logEvent.m_content;
-	//	m_LogLevel = _logEvent.m_LogLevel;
-	//	m_loggername = _logEvent.m_loggername;
-	//}
 };
 
 
@@ -208,7 +183,7 @@ public:
 	void clearLogEventQueue();
 
 	void clearLogAppenderListMap();
-	void addAppender(std::string _loggername, std::shared_ptr<LogAppender> _appender);   // 注意建议在创建线程之前用该函数，以免造成冲突的情况
+	void addAppender(std::string _loggername, std::shared_ptr<LogAppender> _appender);   // 注意该数由Logger::addAppender调用，空间是独立的，因此不会线程安全问题
 	inline bool isFindLogger(const std::string& _loggername);
 
 	void logFormatter(std::stringstream& _ss, LogEvent& _logEvent);
@@ -234,15 +209,7 @@ public:
 	Logger& operator=(const Logger& _logger) = delete;
 	Logger& operator=(Logger&& _logger) noexcept = delete;
 
-	//void log(LogLevel _level, const char* _format, va_list _args);
-	//void log(LogLevel _level, const char* _format, ...);
-	//void debug(const char* _format, ...);
-	//void info(const char* _format, ...);
-	//void warn(const char* _format, ...);
-	//void error(const char* _format, ...);
-	//void fatal(const char* _format, ...);
 	void log(LogLevel _level,const char* _filename, int _line, const char* _format, ...);
-
 
 	// inline void setLoggerName(const std::string _loggerName);    // 禁止用户改 loggerName
 	inline std::string getLoggerName();

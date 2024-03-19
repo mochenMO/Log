@@ -173,6 +173,11 @@ inline int FileLogAppender::getFileSize()
 	return size;
 }
 
+inline void FileLogAppender::setFileSize(int _size)
+{
+	m_maxSize = _size;
+}
+
 void FileLogAppender::scrolling()
 {
 	if (m_fp != nullptr) {   // 由于没有实现setFilename函数，所以 m_fp != nullptr 时 m_filename != ""
@@ -318,7 +323,7 @@ inline void LogEventManager::logFormatter(std::stringstream& _ss, LogEvent& _log
 void LogEventManager::dealLogEvent_threadFuntion()
 {
 	LogEventQueue* tempNode = nullptr;
-	std::list<std::shared_ptr<LogAppender>>* tempList = nullptr;
+	std::list<std::shared_ptr<LogAppender>>* tempList = nullptr;  // 用指针类型避免调用拷贝或者移动函数
 	LogEvent tempData = { 0 };
 	std::stringstream ss;
 
@@ -521,64 +526,6 @@ inline void Logger::setLogLevel(LogLevel _level)
 }
 
 
-// =============================================================================================================
-// 全局的函数模块
-
-// 注意全局函数在实现时，也要加命名空间
-//inline void mochen::log::debug(const char* _format, ...)
-//{
-//	if ((int)defauleLogger.getLogLevel() > (int)LogLevel::debug) {
-//		return;
-//	}
-//	va_list args;
-//	va_start(args, _format);
-//	defauleLogger.log(LogLevel::debug, _format, args);
-//	va_end(args);
-//}
-//
-//inline void mochen::log::info(const char* _format, ...)
-//{
-//	if ((int)defauleLogger.getLogLevel() > (int)LogLevel::info) {
-//		return;
-//	}
-//	va_list args;
-//	va_start(args, _format);
-//	defauleLogger.log(LogLevel::info, _format, args);
-//	va_end(args);
-//}
-//
-//inline void mochen::log::warn(const char* _format, ...)
-//{
-//	if ((int)defauleLogger.getLogLevel() > (int)LogLevel::warn) {
-//		return;
-//	}
-//	va_list args;
-//	va_start(args, _format);
-//	defauleLogger.log(LogLevel::warn, _format, args);
-//	va_end(args);
-//}
-//
-//inline void mochen::log::error(const char* _format, ...)
-//{
-//	if ((int)defauleLogger.getLogLevel() > (int)LogLevel::error) {
-//		return;
-//	}
-//	va_list args;
-//	va_start(args, _format);
-//	defauleLogger.log(LogLevel::error, _format, args);
-//	va_end(args);
-//}
-//
-//inline void mochen::log::fatal(const char* _format, ...)
-//{
-//	if ((int)defauleLogger.getLogLevel() > (int)LogLevel::fatal) {
-//		return;
-//	}
-//	va_list args;
-//	va_start(args, _format);
-//	defauleLogger.log(LogLevel::fatal, _format, args);
-//	va_end(args);
-//}
 
 
 
