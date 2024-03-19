@@ -74,14 +74,14 @@ FileLogAppender::FileLogAppender()
 	m_type = Type::FileLogAppender;
 	m_filename = "";
 	m_fp = nullptr;
-	m_maxSize = 1024;
+	m_maxSize = M_FILEMAXSIZE;
 }
 
 
 FileLogAppender::FileLogAppender(const std::string& _filename, int _maxSize, LogLevel _level)
 {
 	m_type = Type::FileLogAppender;
-	m_maxSize = 1024;
+	m_maxSize = _maxSize;
 	m_filename = _filename;
 
 	std::string temp = _filename;
@@ -491,7 +491,7 @@ void Logger::log(LogLevel _level, const char* _filename, int _line, const char* 
 	LogEvent data;
 	data.m_timestamp = time(nullptr);
 	data.m_loggername = new std::string(m_loggername);
-	data.m_LogLevel = m_level;
+	data.m_LogLevel = _level;
 	data.m_filename = _filename;
 	data.m_line = _line;
 	data.m_content = buffer;

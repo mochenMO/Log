@@ -129,9 +129,10 @@ private:
 	std::string m_filename;
 	FILE* m_fp;
 	int m_maxSize;
+#define M_FILEMAXSIZE 409600
 public:
 	FileLogAppender();
-	FileLogAppender(const std::string& _filename, int _maxSize = 1024, LogLevel _level = LogLevel::debug);
+	FileLogAppender(const std::string& _filename, int _maxSize = M_FILEMAXSIZE, LogLevel _level = LogLevel::debug);
 	~FileLogAppender();
 
 	FileLogAppender(const FileLogAppender& _value) = delete;  // 不能拷贝，因为实现滚动机制时要改变文件名。
