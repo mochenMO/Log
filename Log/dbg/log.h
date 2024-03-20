@@ -208,7 +208,7 @@ private:
 	std::string m_loggername; 
 	LogLevel m_level;
 public:
-	Logger(const std::string& _loggername, LogLevel _level = LogLevel::debug, std::shared_ptr<LogAppender> _appender = (*getDefaultLogAppender()));   // 注意：虽然DefaultLogAppender先被创建，但它的资源释放由LogEventManager控制
+	Logger(const std::string& _loggername, LogLevel _level = LogLevel::debug, std::shared_ptr<LogAppender> _appender = std::make_shared<ConsoleLogAppender>());   // 注意：虽然DefaultLogAppender先被创建，但它的资源释放由LogEventManager控制
 	~Logger() = default;   // LogAppender的释放交给LogEventManager
 
 	Logger(const Logger& _logger) = delete;

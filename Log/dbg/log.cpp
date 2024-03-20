@@ -12,20 +12,10 @@ inline LogEventManager* mochen::log::getDefaultLogEventManager() // ×¢ÒâÔÚC++11¼
 	return &defauleLogEventManager;
 }
 
-
-// È«¾Öº¯Êı defauleLogAppender
-inline std::shared_ptr<LogAppender>* mochen::log::getDefaultLogAppender() 
-{
-	// ×¢Òâ£ºËäÈ»¸ÃÖÇÄÜÖ¸ÕëÊÇ¾²Ì¬±äÁ¿£¬¿ÉÒÔÍ¨¹ıµ÷ÓÃÖÇÄÜÖ¸ÕëÖĞµÄº¯ÊıÊÍ·ÅÆäËùÉêÇëµÄÄÚ´æ£¬Í¬Ê±ÄÚ²¿µÄÖ¸Õë»á±»¸³ÖµÎª nullptr
-	static std::shared_ptr<LogAppender> defauleLogAppender = std::make_shared<ConsoleLogAppender>();
-	return &defauleLogAppender;
-}
-
-
 // È«¾Öº¯Êı
 inline Logger* mochen::log::getDefaultLogger()
 {
-	static Logger defauleLogger("defauleLogger", LogLevel::debug, (*getDefaultLogAppender()));
+	static Logger defauleLogger("defauleLogger", LogLevel::debug, std::make_shared<ConsoleLogAppender>());
 	return &defauleLogger;
 }
 
