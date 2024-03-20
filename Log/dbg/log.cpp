@@ -5,30 +5,29 @@ using namespace mochen::log;
 // =============================================================================================================
 // 全局区
 
-// 创建全局的 defauleLogEventManager （注意 LogEventManager 是个单例）
-LogEventManager defauleLogEventManager{};
+// 创建全局的 defauleLogEventManager (注意：定义全局函数时也要加上命名空间)
+inline LogEventManager* mochen::log::getDefaultLogEventManager() // 注意在C++11及以上版本标准中，规定静态局部变量初始化的线程安全性
+{
+	static LogEventManager defauleLogEventManager{};
+	return &defauleLogEventManager;
+}
 
-// 全局函数
-std::shared_ptr<LogAppender> defauleLogAppender = std::make_shared<ConsoleLogAppender>();
 
+// 全局函数 defauleLogAppender
 inline std::shared_ptr<LogAppender>* mochen::log::getDefaultLogAppender() 
 {
-	// static std::shared_ptr<LogAppender> defauleLogAppender = std::make_shared<ConsoleLogAppender>();
-	// 注意不用static的是因为，在多线程中同时创建static的是有的风险的。
+	// 注意：虽然该智能指针是静态变量，可以通过调用智能指针中的函数释放其所申请的内存，同时内部的指针会被赋值为 nullptr
+	static std::shared_ptr<LogAppender> defauleLogAppender = std::make_shared<ConsoleLogAppender>();
 	return &defauleLogAppender;
 }
 
 
 // 全局函数
-Logger defauleLogger("defauleLogger", LogLevel::debug, (*getDefaultLogAppender()));
-
 inline Logger* mochen::log::getDefaultLogger()
 {
-	// static Logger defauleLogger("defauleLogger", LogLevel::debug, (*getDefaultLogAppender()));
-	// 注意不用static的是因为，在多线程中同时创建static的是有的风险的。
+	static Logger defauleLogger("defauleLogger", LogLevel::debug, (*getDefaultLogAppender()));
 	return &defauleLogger;
 }
-
 
 
 // 声明全局的 logLevelString
@@ -263,7 +262,9 @@ void LogEventManager::clearLogAppenderListMap()
 
 void LogEventManager::addAppender(std::string _loggername, std::shared_ptr<LogAppender> _appender)
 {
-	(*m_LogAppenderListMap)[_loggername].push_back(_appender);
+	m_mutex.lock();  // 注意：千万别忘记加锁因为树结构有个元素之间有关联性它不是独立的 ！！！！
+	(*m_LogAppenderListMap)[_loggername].push_back(_appender);   
+	m_mutex.unlock();
 }
 
 
@@ -359,14 +360,15 @@ void LogEventManager::addLogEvent(LogEvent _logEvent)
 
 Logger::Logger(const std::string& _loggername, LogLevel _level, std::shared_ptr<LogAppender> _appender)
 {
-	if (defauleLogEventManager.isFindLogger(_loggername) == true) {
+	// 注意 getDefaultLogEventManager() 这段代码保证了 LogEventManager 在 Logger 之前创建，确保了 LogEventManager 最后才销毁
+	if (getDefaultLogEventManager()->isFindLogger(_loggername) == true) {
 		throw std::logic_error("loggername must be unqiue: <_loggername> is already exists");
 	}
 	
 	m_level = _level;
 
 	m_loggername = _loggername;
-	defauleLogEventManager.addAppender(_loggername, _appender);
+	getDefaultLogEventManager()->addAppender(_loggername, _appender);
 
 	return;
 }
@@ -393,7 +395,7 @@ void Logger::log(LogLevel _level, const char* _filename, int _line, const char* 
 	data.m_line = _line;
 	data.m_content = buffer;
 
-	defauleLogEventManager.addLogEvent(data);
+	getDefaultLogEventManager()->addLogEvent(data);
 }
 
 inline std::string Logger::getLoggerName()
@@ -403,7 +405,7 @@ inline std::string Logger::getLoggerName()
 
 bool Logger::addAppender(std::shared_ptr<LogAppender> _appender)
 {
-	defauleLogEventManager.addAppender(m_loggername, _appender);
+	getDefaultLogEventManager()->addAppender(m_loggername, _appender);
 	return true;
 }
 

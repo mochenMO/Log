@@ -196,6 +196,9 @@ public:
 	void addLogEvent(LogEvent _logEvent);   // 该函数需要线程安全
 };
 
+// 声明全局函数，代替在头文件中声明全局变量，且返回的指针类型，避免调用拷贝或移动相关函数
+extern inline LogEventManager* getDefaultLogEventManager();
+
 
 // 日志器
 class Logger
