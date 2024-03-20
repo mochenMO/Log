@@ -250,20 +250,22 @@ extern inline Logger* getDefaultLogger();
 	mochen::log::getDefaultLogger()->log(mochen::log::LogLevel::fatal, __FILE__, __LINE__, _format, ##__VA_ARGS__)
 
 
-#define logger_debug(logger, _format, ...) \
-	logger.log(mochen::log::LogLevel::debug, __FILE__, __LINE__, _format, ##__VA_ARGS__)
+#define logger_debug(_logger, _format, ...) \
+	_logger.log(mochen::log::LogLevel::debug, __FILE__, __LINE__, _format, ##__VA_ARGS__)
 
-#define logger_info(logger, _format, ...) \
-	logger.log(mochen::log::LogLevel::info, __FILE__, __LINE__, _format, ##__VA_ARGS__)
+#define logger_info(_logger, _format, ...) \
+	_logger.log(mochen::log::LogLevel::info, __FILE__, __LINE__, _format, ##__VA_ARGS__)
 
-#define logger_warn(logger, _format, ...) \
-	logger.log(mochen::log::LogLevel::warn, __FILE__, __LINE__, _format, ##__VA_ARGS__)
+#define logger_warn(_logger, _format, ...) \
+	_logger.log(mochen::log::LogLevel::warn, __FILE__, __LINE__, _format, ##__VA_ARGS__)
 
-#define logger_error(logger, _format, ...) \
-	logger.log(mochen::log::LogLevel::error, __FILE__, __LINE__, _format, ##__VA_ARGS__)
+#define logger_error(_logger, _format, ...) \
+	_logger.log(mochen::log::LogLevel::error, __FILE__, __LINE__, _format, ##__VA_ARGS__)
 
-#define logger_fatal(logger, _format, ...) \
-	logger.log(mochen::log::LogLevel::fatal, __FILE__, __LINE__, _format, ##__VA_ARGS__)
+#define logger_fatal(_logger, _format, ...) \
+	_logger.log(mochen::log::LogLevel::fatal, __FILE__, __LINE__, _format, ##__VA_ARGS__)
+
+
 
 
 
