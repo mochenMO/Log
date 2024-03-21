@@ -25,11 +25,103 @@ const char* logLevelString[5] = { "debug","info","warn","error","fatal" };
 
 
 // =============================================================================================================
+// 格式化函数
+
+
+// [年-月-日 时:分:秒][日志器名称][日志等级][文件名]:[行号][日志信息]
+extern inline void mochen::log::logFormatFuntion_detailed(std::stringstream& _ss, LogEvent& _logEvent)
+{
+	char timeString[24] = { 0 };
+	struct tm* pt = nullptr;     // 注意 pt 指向的内存空间由系统管理，无需手动释放
+
+	// 处理时间
+	pt = localtime(&_logEvent.m_timestamp);
+	// [0000-00-00 00:00:00]
+	sprintf(timeString, "%d-%0.2d-%0.2d %0.2d:%0.2d:%0.2d",
+		pt->tm_year + 1900,
+		pt->tm_mon + 1,
+		pt->tm_mday,
+		pt->tm_hour,
+		pt->tm_min,
+		pt->tm_sec);
+
+	// [年-月-日 时:分:秒][日志器名称][日志等级][文件名]:[行号][日志信息]
+	_ss << "[" << timeString << "]";
+	_ss << "[" << *(_logEvent.m_loggername) << "]";
+	_ss << "[" << logLevelString[(int)_logEvent.m_LogLevel] << "]";
+	_ss << "[" << _logEvent.m_filename << "]:";
+	_ss << "[" << _logEvent.m_line << "]";
+	_ss << "[" << _logEvent.m_content << "]";
+	_ss << "\n";
+}
+
+
+// [时:分:秒][日志等级][简要的文件名]:[行号][日志信息]
+extern inline void mochen::log::logFormatFuntion_briefly(std::stringstream& _ss, LogEvent& _logEvent)
+{
+	char timeString[24] = { 0 };
+	struct tm* pt = nullptr;     // 注意 pt 指向的内存空间由系统管理，无需手动释放
+
+	// 提取文件名
+	const char* temp = _logEvent.m_filename + strlen(_logEvent.m_filename);   // 把 temp 移到 _logEvent.m_filename 的结尾
+	while (temp != _logEvent.m_filename) {
+		if (*temp == '\\') {
+			++temp;
+			break;
+		} 
+		--temp;
+	}
+
+	// 处理时间
+	pt = localtime(&_logEvent.m_timestamp);
+	// [00:00:00]
+	sprintf(timeString, "%0.2d:%0.2d:%0.2d",
+		pt->tm_hour,
+		pt->tm_min,
+		pt->tm_sec);
+
+	// [时:分:秒][日志等级][简要的文件名]:[行号][日志信息]
+	_ss << "[" << timeString << "]";
+	_ss << "[" << logLevelString[(int)_logEvent.m_LogLevel] << "]";
+	_ss << "[" << temp << "]:";
+	_ss << "[" << _logEvent.m_line << "]";
+	_ss << "[" << _logEvent.m_content << "]";
+	_ss << "\n";
+}
+
+
+// =============================================================================================================
 // class LogAppender
+
+LogAppender::LogAppender()
+{
+	m_pLogFormatFuntion = &logFormatFuntion_briefly;
+}
+
+PLogFormatFuntion LogAppender::getFormatFuntion()
+{
+	return m_pLogFormatFuntion;
+}
+
+void LogAppender::setFormatFuntion(PLogFormatFuntion _pLogFormatFuntion)
+{
+	m_pLogFormatFuntion = _pLogFormatFuntion;
+}
+
 
 
 // =============================================================================================================
 // class ConsoleLogAppender
+
+ConsoleLogAppender::ConsoleLogAppender()
+{
+	m_pLogFormatFuntion = &logFormatFuntion_briefly;
+}
+
+ConsoleLogAppender::ConsoleLogAppender(PLogFormatFuntion _pLogFormatFuntion)
+{
+	m_pLogFormatFuntion = _pLogFormatFuntion;
+}
 
 void ConsoleLogAppender::log(const char* _massage)
 {
@@ -42,6 +134,7 @@ void ConsoleLogAppender::log(const char* _massage)
 
 FileLogAppender::FileLogAppender()
 {
+	m_pLogFormatFuntion = &logFormatFuntion_detailed;
 	m_filename = "";
 	m_fp = nullptr;
 	m_maxSize = M_FILEMAXSIZE;
@@ -264,31 +357,31 @@ inline bool LogEventManager::isFindLogger(const std::string& _loggername)
 }
 
 
-inline void LogEventManager::logFormatter(std::stringstream& _ss, LogEvent& _logEvent)
-{
-	char timeString[24] = { 0 };
-	struct tm* pt = nullptr;     // 注意 pt 指向的内存空间由系统管理，无需手动释放
-
-	// 处理时间
-	pt = localtime(&_logEvent.m_timestamp);
-	// [0000-00-00 00:00:00]   // 因为每次写入的值的长度都是固定的，所以不用清空 timeString
-	sprintf(timeString, "%d-%0.2d-%0.2d %0.2d:%0.2d:%0.2d",
-		pt->tm_year + 1900,
-		pt->tm_mon + 1,
-		pt->tm_mday,
-		pt->tm_hour,
-		pt->tm_min,
-		pt->tm_sec);
-
-	// [年-月-日 时:分:秒][日志器名称][日志等级][文件名]:[行号][日志信息]
-	_ss << "[" << timeString << "]";
-	_ss << "[" << *(_logEvent.m_loggername) << "]";
-	_ss << "[" << logLevelString[(int)_logEvent.m_LogLevel] << "]";
-	_ss << "[" << _logEvent.m_filename << "]:";
-	_ss << "[" << _logEvent.m_line << "]";
-	_ss << "[" << _logEvent.m_content << "]";
-	_ss << "\n";
-}
+//inline void LogEventManager::logFormatter(std::stringstream& _ss, LogEvent& _logEvent)
+//{
+//	char timeString[24] = { 0 };
+//	struct tm* pt = nullptr;     // 注意 pt 指向的内存空间由系统管理，无需手动释放
+//
+//	// 处理时间
+//	pt = localtime(&_logEvent.m_timestamp);
+//	// [0000-00-00 00:00:00]   // 因为每次写入的值的长度都是固定的，所以不用清空 timeString
+//	sprintf(timeString, "%d-%0.2d-%0.2d %0.2d:%0.2d:%0.2d",
+//		pt->tm_year + 1900,
+//		pt->tm_mon + 1,
+//		pt->tm_mday,
+//		pt->tm_hour,
+//		pt->tm_min,
+//		pt->tm_sec);
+//
+//	// [年-月-日 时:分:秒][日志器名称][日志等级][文件名]:[行号][日志信息]
+//	_ss << "[" << timeString << "]";
+//	_ss << "[" << *(_logEvent.m_loggername) << "]";
+//	_ss << "[" << logLevelString[(int)_logEvent.m_LogLevel] << "]";
+//	_ss << "[" << _logEvent.m_filename << "]:";
+//	_ss << "[" << _logEvent.m_line << "]";
+//	_ss << "[" << _logEvent.m_content << "]";
+//	_ss << "\n";
+//}
 
 
 void LogEventManager::dealLogEvent_threadFuntion()
@@ -317,7 +410,10 @@ void LogEventManager::dealLogEvent_threadFuntion()
 			tempList = &(*m_LogAppenderListMap)[*(tempData.m_loggername)];
 
 			for (auto it = tempList->begin(); it != tempList->end(); ++it) {  // 或者用 (*(*it)).getType();
-				logFormatter(ss, tempData);
+
+				// logFormatter(ss, tempData);
+
+				it->get()->getFormatFuntion()(ss, tempData);
 				it->get()->log(ss.str().c_str());
 				ss.str("");   // 清空 stringstream
 			}

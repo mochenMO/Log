@@ -26,11 +26,11 @@ void test01()
 	Logger01.log(log::LogLevel::error, __FILE__, __LINE__, "test error %s", "asdsad");
 	Logger01.log(log::LogLevel::fatal, __FILE__, __LINE__, "test fatal %d %s %lf", 10, "sads", 0.343);
 
-	logger_debug(Logger01, "test debug");
-	logger_info(Logger01, "test info %d", 1123);
-	logger_warn(Logger01, "test warn %lf", 1.123213);
-	logger_error(Logger01, "test error %s", "asdsad");
-	logger_fatal(Logger01, "test fatal %d %s %lf", 10, "sads", 0.343);
+	logger_debug(&Logger01, "test debug");
+	logger_info(&Logger01, "test info %d", 1123);
+	logger_warn(&Logger01, "test warn %lf", 1.123213);
+	logger_error(&Logger01, "test error %s", "asdsad");
+	logger_fatal(&Logger01, "test fatal %d %s %lf", 10, "sads", 0.343);
 
 	default_debug("test debug");
 	default_info("test info %d", 1123);
@@ -46,7 +46,7 @@ void test02()
 	Logger01.addAppender(std::make_shared<log::FileLogAppender>("test02"));
 
 	for (int i = 0; i < 1000; ++i) {
-		logger_debug(Logger01, "test03 %d", i);
+		logger_debug(&Logger01, "test03 %d", i);
 	}
 }
 
@@ -58,7 +58,7 @@ void test03()
 	log::Logger Logger01("Logger01");
 
 	for (int i = 0; i < 1000; ++i) {
-		logger_debug(Logger01, "main => %d", i);
+		logger_debug(&Logger01, "main => %d", i);
 	}
 
 	//for (int i = 0; i < 1000; ++i) {
@@ -73,7 +73,7 @@ void threadFunctionConsole(std::string _name)
 {
 	log::Logger logger(_name);
 	for (int i = 0; i < 100; ++i) {
-		logger_debug(logger, "%s => %d", _name.c_str(), i);
+		logger_debug(&logger, "%s => %d", _name.c_str(), i);
 	}
 }
 
@@ -85,7 +85,7 @@ void threadFunctionFile(std::string _name, std::string _filename)
 	fileLogAppender->open(_filename);
 	logger.addAppender(fileLogAppender);
 	for (int i = 0; i < 100; ++i) {
-		logger_debug(logger, "%s => %d", _name.c_str(), i);
+		logger_debug(&logger, "%s => %d", _name.c_str(), i);
 	}
 }
 
@@ -113,10 +113,10 @@ void test04()
 
 int main()
 {
-	// test01(); // 测试默认Logger 和自定义Logger
+	test01(); // 测试默认Logger 和自定义Logger
 	// test02(); // 测试文件写入
 	// test03(); // 测试运行效率
-	test04(); // 测试多线程下的线程安全性
+	// test04(); // 测试多线程下的线程安全性
 	
 	return 0;
 }

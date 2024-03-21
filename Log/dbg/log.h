@@ -92,22 +92,49 @@ enum class LogLevel
 	fatal
 };
 
+
+// 日志事件
+struct LogEvent
+{
+	time_t	     m_timestamp;
+	std::string* m_loggername; // 申请内存了需要手动释放 
+	LogLevel     m_LogLevel;
+	const char* m_filename;
+	int		     m_line;
+	char* m_content;    // 申请内存了需要手动释放 
+};
+
+
+// 格式化函数
+typedef void (*PLogFormatFuntion)(std::stringstream& _ss, LogEvent& _logEvent) ;
+
+// [年-月-日 时:分:秒][日志器名称][日志等级][文件名]:[行号][日志信息]
+extern inline void logFormatFuntion_detailed(std::stringstream& _ss, LogEvent& _logEvent);
+
+// [时:分:秒][日志等级][简要的文件名]:[行号][日志信息]
+extern inline void logFormatFuntion_briefly(std::stringstream& _ss, LogEvent& _logEvent);
+
+
 // 日志输出目的地
 class LogAppender
 {
+protected:
+	PLogFormatFuntion m_pLogFormatFuntion;
 public:
-	LogAppender() = default;
+	LogAppender();
 	virtual ~LogAppender() {}                    // 虚析构函数需要实现函数的定义，如果只写函数说明，可能出现链接错误
 
 	virtual void log(const char* _massage) = 0;  // 纯虚函数
+	PLogFormatFuntion getFormatFuntion();
+	void setFormatFuntion(PLogFormatFuntion _pLogFormatFuntion);
 };
 
 
 class ConsoleLogAppender : public LogAppender
 {
 public:
-	ConsoleLogAppender() = default;
-
+	ConsoleLogAppender();
+	ConsoleLogAppender(PLogFormatFuntion _pLogFormatFuntion);
 	void log(const char* _massage) override;
 };
 
@@ -145,16 +172,7 @@ public:
 };
 
 
-// 日志事件
-struct LogEvent
-{
-	time_t	     m_timestamp;
-	std::string *m_loggername; // 申请内存了需要手动释放 
-	LogLevel     m_LogLevel;
-	const char  *m_filename;  
-	int		     m_line;
-	char        *m_content;    // 申请内存了需要手动释放 
-};
+
 
 
 // 日志事件管理器
@@ -193,7 +211,8 @@ public:
 	void addAppender(std::string _loggername, std::shared_ptr<LogAppender> _appender);   // 注意该数由Logger::addAppender调用，空间是独立的，因此不会线程安全问题
 	inline bool isFindLogger(const std::string& _loggername);
 
-	void logFormatter(std::stringstream& _ss, LogEvent& _logEvent);
+	// void logFormatter(std::stringstream& _ss, LogEvent& _logEvent);
+
 	void dealLogEvent_threadFuntion();
 	void addLogEvent(LogEvent _logEvent);   // 该函数需要线程安全
 };
@@ -253,19 +272,19 @@ extern inline Logger* getDefaultLogger();
 
 
 #define logger_debug(_logger, _format, ...) \
-	(_logger).log(mochen::log::LogLevel::debug, __FILE__, __LINE__, _format, ##__VA_ARGS__)
+	(_logger)->log(mochen::log::LogLevel::debug, __FILE__, __LINE__, _format, ##__VA_ARGS__)
 
 #define logger_info(_logger, _format, ...) \
-	(_logger).log(mochen::log::LogLevel::info, __FILE__, __LINE__, _format, ##__VA_ARGS__)
+	(_logger)->log(mochen::log::LogLevel::info, __FILE__, __LINE__, _format, ##__VA_ARGS__)
 
 #define logger_warn(_logger, _format, ...) \
-	(_logger).log(mochen::log::LogLevel::warn, __FILE__, __LINE__, _format, ##__VA_ARGS__)
+	(_logger)->log(mochen::log::LogLevel::warn, __FILE__, __LINE__, _format, ##__VA_ARGS__)
 
 #define logger_error(_logger, _format, ...) \
-	(_logger).log(mochen::log::LogLevel::error, __FILE__, __LINE__, _format, ##__VA_ARGS__)
+	(_logger)->log(mochen::log::LogLevel::error, __FILE__, __LINE__, _format, ##__VA_ARGS__)
 
 #define logger_fatal(_logger, _format, ...) \
-	(_logger).log(mochen::log::LogLevel::fatal, __FILE__, __LINE__, _format, ##__VA_ARGS__)
+	(_logger)->log(mochen::log::LogLevel::fatal, __FILE__, __LINE__, _format, ##__VA_ARGS__)
 
 
 
