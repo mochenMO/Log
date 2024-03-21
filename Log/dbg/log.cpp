@@ -72,7 +72,7 @@ FileLogAppender::FileLogAppender(FileLogAppender&& _value) noexcept
 {
 	m_filename = _value.m_filename;
 	m_fp = _value.m_fp;
-	
+
 	_value.m_filename = "";
 	_value.m_fp = nullptr;
 }
@@ -187,7 +187,7 @@ void FileLogAppender::scrolling()
 // =============================================================================================================
 // class LogEventManager
 
-LogEventManager::LogEventManager() : 
+LogEventManager::LogEventManager() :
 	m_thread(&LogEventManager::dealLogEvent_threadFuntion, this),  // 注意使用成员函数指针时要加作用域
 	m_isCanExit(false)
 {
@@ -207,7 +207,7 @@ LogEventManager::~LogEventManager()
 {
 	m_isCanExit = true;         // 注意 m_isCanExit = true 且处理完日志队列中所有数据后才能退出
 	m_thread.join();            // 等待处理完日志队列中所有数据
-	clearLogEventQueue();       
+	clearLogEventQueue();
 	clearLogAppenderListMap();
 
 	printf("~LogEventManager\n");  // LogEventManager应该是最后一个析构的
@@ -253,7 +253,7 @@ void LogEventManager::clearLogAppenderListMap()
 void LogEventManager::addAppender(std::string _loggername, std::shared_ptr<LogAppender> _appender)
 {
 	m_mutex.lock();  // 注意：千万别忘记加锁因为树结构有个元素之间有关联性它不是独立的 ！！！！
-	(*m_LogAppenderListMap)[_loggername].push_back(_appender);   
+	(*m_LogAppenderListMap)[_loggername].push_back(_appender);
 	m_mutex.unlock();
 }
 
@@ -284,7 +284,7 @@ inline void LogEventManager::logFormatter(std::stringstream& _ss, LogEvent& _log
 	_ss << "[" << timeString << "]";
 	_ss << "[" << *(_logEvent.m_loggername) << "]";
 	_ss << "[" << logLevelString[(int)_logEvent.m_LogLevel] << "]";
- 	_ss << "[" << _logEvent.m_filename << "]:";
+	_ss << "[" << _logEvent.m_filename << "]:";
 	_ss << "[" << _logEvent.m_line << "]";
 	_ss << "[" << _logEvent.m_content << "]";
 	_ss << "\n";
@@ -298,19 +298,26 @@ void LogEventManager::dealLogEvent_threadFuntion()
 	LogEvent tempData = { 0 };
 	std::stringstream ss;
 
+	bool isOk = false;
 
 	while (m_isCanExit == false || m_ptrRead->m_next != nullptr)  // 注意 m_isCanExit = true 且处理完日志队列中所有数据后才能退出
 	{
-		if (m_ptrRead->m_next != nullptr) 
+		m_mutex.lock();
+		if (m_ptrRead->m_next != nullptr)   // 当m_ptrRead = m_ptrWrite 时可能会在写入途中访问，从而获取无效的值，造成程序的崩溃，因此该代码属于临界区一定要加锁。
+		{
+			isOk = true;
+		}
+		m_mutex.unlock();
+
+		if (isOk)  // 自锁结构
 		{
 			tempNode = m_ptrRead->m_next;
 			m_ptrRead = m_ptrRead->m_next;
-
 			tempData = tempNode->m_data;
 			tempList = &(*m_LogAppenderListMap)[*(tempData.m_loggername)];
 
-			for(auto it = tempList->begin(); it != tempList->end(); ++it) {  // 或者用 (*(*it)).getType();
-				logFormatter(ss, tempData);    
+			for (auto it = tempList->begin(); it != tempList->end(); ++it) {  // 或者用 (*(*it)).getType();
+				logFormatter(ss, tempData);
 				it->get()->log(ss.str().c_str());
 				ss.str("");   // 清空 stringstream
 			}
@@ -321,20 +328,19 @@ void LogEventManager::dealLogEvent_threadFuntion()
 				tempNode->m_next->m_prev = tempNode->m_prev;
 				clearLogEventNodeData(tempNode);
 			}
-			
+
+			isOk = false; // 自锁结构
 		}
-	
 	}
-
-
 }
+
 
 void LogEventManager::addLogEvent(LogEvent _logEvent)
 {
 	m_mutex.lock();
-	
+
 	m_ptrWrite->m_next = (LogEventQueue*)malloc(sizeof(LogEventQueue));
-	
+
 	m_ptrWrite->m_next->m_next = nullptr;
 	m_ptrWrite->m_next->m_prev = m_ptrWrite;
 	m_ptrWrite->m_next->m_data = _logEvent;
@@ -343,6 +349,8 @@ void LogEventManager::addLogEvent(LogEvent _logEvent)
 
 	m_mutex.unlock();
 }
+
+
 
 
 // =============================================================================================================
@@ -354,7 +362,7 @@ Logger::Logger(const std::string& _loggername, LogLevel _level, std::shared_ptr<
 	if (getDefaultLogEventManager()->isFindLogger(_loggername) == true) {
 		throw std::logic_error("Logger::Logger(): loggername must be unqiue, <_loggername> is already exists");
 	}
-	
+
 	m_level = _level;
 
 	m_loggername = _loggername;

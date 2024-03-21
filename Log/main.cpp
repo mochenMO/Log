@@ -111,18 +111,13 @@ void test04()
 
 
 
-
 int main()
 {
-	test01(); // 测试默认Logger 和自定义Logger
+	// test01(); // 测试默认Logger 和自定义Logger
 	// test02(); // 测试文件写入
 	// test03(); // 测试运行效率
-	// test04(); // 测试多线程下的线程安全性
+	test04(); // 测试多线程下的线程安全性
 	
-	for (int i = 0; i < 100; ++i) {
-		default_debug("main => %d", i);
-	}
-
 	return 0;
 }
 
