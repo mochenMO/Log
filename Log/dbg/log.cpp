@@ -143,6 +143,7 @@ FileLogAppender::FileLogAppender()
 
 FileLogAppender::FileLogAppender(const std::string& _filename, int _maxSize)
 {
+	m_pLogFormatFuntion = &logFormatFuntion_detailed;
 	m_maxSize = _maxSize;
 	m_filename = _filename;
 
@@ -286,11 +287,9 @@ LogEventManager::LogEventManager() :
 {
 	m_logEventQueue = (LogEventQueue*)malloc(sizeof(LogEventQueue));
 	m_logEventQueue->m_next = nullptr;
-	m_logEventQueue->m_prev = nullptr;
 
 	m_ptrWrite = m_logEventQueue;
 	m_ptrRead = m_logEventQueue;
-	m_ptrDelete = m_logEventQueue;
 
 	m_LogAppenderListMap = new std::map<std::string, std::list<std::shared_ptr<LogAppender>>>{};
 }
@@ -346,7 +345,7 @@ void LogEventManager::clearLogAppenderListMap()
 void LogEventManager::addAppender(std::string _loggername, std::shared_ptr<LogAppender> _appender)
 {
 	m_mutex.lock();  // 注意：千万别忘记加锁因为树结构有个元素之间有关联性它不是独立的 ！！！！
-	(*m_LogAppenderListMap)[_loggername].push_back(_appender);
+	(*m_LogAppenderListMap)[_loggername].push_back(_appender);   // map是个复杂的黑盒类，无法用原子操作
 	m_mutex.unlock();
 }
 
@@ -357,93 +356,108 @@ inline bool LogEventManager::isFindLogger(const std::string& _loggername)
 }
 
 
-//inline void LogEventManager::logFormatter(std::stringstream& _ss, LogEvent& _logEvent)
-//{
-//	char timeString[24] = { 0 };
-//	struct tm* pt = nullptr;     // 注意 pt 指向的内存空间由系统管理，无需手动释放
-//
-//	// 处理时间
-//	pt = localtime(&_logEvent.m_timestamp);
-//	// [0000-00-00 00:00:00]   // 因为每次写入的值的长度都是固定的，所以不用清空 timeString
-//	sprintf(timeString, "%d-%0.2d-%0.2d %0.2d:%0.2d:%0.2d",
-//		pt->tm_year + 1900,
-//		pt->tm_mon + 1,
-//		pt->tm_mday,
-//		pt->tm_hour,
-//		pt->tm_min,
-//		pt->tm_sec);
-//
-//	// [年-月-日 时:分:秒][日志器名称][日志等级][文件名]:[行号][日志信息]
-//	_ss << "[" << timeString << "]";
-//	_ss << "[" << *(_logEvent.m_loggername) << "]";
-//	_ss << "[" << logLevelString[(int)_logEvent.m_LogLevel] << "]";
-//	_ss << "[" << _logEvent.m_filename << "]:";
-//	_ss << "[" << _logEvent.m_line << "]";
-//	_ss << "[" << _logEvent.m_content << "]";
-//	_ss << "\n";
-//}
-
-
 void LogEventManager::dealLogEvent_threadFuntion()
 {
-	LogEventQueue* tempNode = nullptr;
+	LogEventQueue* tempNode = nullptr;    // 临时保存可读的节点，读取完后，辅助删除
 	std::list<std::shared_ptr<LogAppender>>* tempList = nullptr;  // 用指针类型避免调用拷贝或者移动函数
 	LogEvent tempData = { 0 };
 	std::stringstream ss;
 
-	bool isOk = false;
-
-	while (m_isCanExit == false || m_ptrRead->m_next != nullptr)  // 注意 m_isCanExit = true 且处理完日志队列中所有数据后才能退出
+	 
+	while (m_isCanExit == false || m_ptrRead->m_next != nullptr)  // m_ptrRead == m_ptrWrite   ????
 	{
-		m_mutex.lock();
-		if (m_ptrRead->m_next != nullptr)   // 当m_ptrRead = m_ptrWrite 时可能会在写入途中访问，从而获取无效的值，造成程序的崩溃，因此该代码属于临界区一定要加锁。
-		{
-			isOk = true;
-		}
-		m_mutex.unlock();
-
-		if (isOk)  // 自锁结构
+		if (m_ptrRead->m_next != nullptr)
 		{
 			tempNode = m_ptrRead->m_next;
 			m_ptrRead = m_ptrRead->m_next;
+
 			tempData = tempNode->m_data;
 			tempList = &(*m_LogAppenderListMap)[*(tempData.m_loggername)];
 
+			// 遍历 tempList 中所有的 LogAppender
 			for (auto it = tempList->begin(); it != tempList->end(); ++it) {  // 或者用 (*(*it)).getType();
-
-				// logFormatter(ss, tempData);
-
 				it->get()->getFormatFuntion()(ss, tempData);
 				it->get()->log(ss.str().c_str());
 				ss.str("");   // 清空 stringstream
 			}
 
-			if (m_ptrDelete->m_next != m_ptrRead) {
-				tempNode = m_ptrDelete->m_next;
-				tempNode->m_prev->m_next = tempNode->m_next;
-				tempNode->m_next->m_prev = tempNode->m_prev;
+			if (m_logEventQueue-> m_next != m_ptrRead) {   // 头删法
+				tempNode = m_logEventQueue->m_next;
+				m_logEventQueue->m_next = tempNode->m_next;
 				clearLogEventNodeData(tempNode);
 			}
 
-			isOk = false; // 自锁结构
 		}
+
 	}
+
+
+
+
+	//bool isOk = false;
+
+	//while (m_isCanExit == false || m_ptrRead->m_next != nullptr)  // 注意 m_isCanExit = true 且处理完日志队列中所有数据后才能退出
+	//{
+	//	m_mutex.lock();
+	//	if (m_ptrRead->m_next != nullptr)   // 当m_ptrRead = m_ptrWrite 时可能会在写入途中访问，从而获取无效的值，造成程序的崩溃，因此该代码属于临界区一定要加锁。
+	//	{
+	//		isOk = true;
+	//	}
+	//	m_mutex.unlock();
+
+	//	if (isOk)  // 自锁结构
+	//	{
+	//		tempNode = m_ptrRead->m_next;
+	//		m_ptrRead = m_ptrRead->m_next;
+	//		tempData = tempNode->m_data;
+	//		tempList = &(*m_LogAppenderListMap)[*(tempData.m_loggername)];
+
+	//		for (auto it = tempList->begin(); it != tempList->end(); ++it) {  // 或者用 (*(*it)).getType();
+
+	//			// logFormatter(ss, tempData);
+
+	//			it->get()->getFormatFuntion()(ss, tempData);
+	//			it->get()->log(ss.str().c_str());
+	//			ss.str("");   // 清空 stringstream
+	//		}
+
+	//if (m_logEventQueue->m_next != m_ptrRead) {   // 头删法
+	//	tempNode = m_logEventQueue->m_next;
+	//	m_logEventQueue->m_next = tempNode->m_next;
+	//	clearLogEventNodeData(tempNode);
+	//}
+
+	//		isOk = false; // 自锁结构
+	//	}
+	//}
+
+
 }
 
 
 void LogEventManager::addLogEvent(LogEvent _logEvent)
 {
-	m_mutex.lock();
+	LogEventQueue* newNode = (LogEventQueue*)malloc(sizeof(LogEventQueue));
+	newNode->m_next = nullptr;
+	newNode->m_data = _logEvent;
 
-	m_ptrWrite->m_next = (LogEventQueue*)malloc(sizeof(LogEventQueue));
+	while (true) // 原子操作通常要配合自旋锁
+	{  
+		LogEventQueue* currentWrite = m_ptrWrite;
+		LogEventQueue* next = currentWrite->m_next;   // 注意：不是 m_ptrWrite->m_next
 
-	m_ptrWrite->m_next->m_next = nullptr;
-	m_ptrWrite->m_next->m_prev = m_ptrWrite;
-	m_ptrWrite->m_next->m_data = _logEvent;
-
-	m_ptrWrite = m_ptrWrite->m_next;
-
-	m_mutex.unlock();
+		if (currentWrite == m_ptrWrite) {
+			if(next == nullptr) {
+				if (InterlockedCompareExchangePointer((PVOID*)(&(currentWrite->m_next)), newNode, nullptr) == nullptr) {
+					InterlockedExchangePointer((PVOID*)(&(m_ptrWrite)), newNode);
+					break;
+				}
+			}
+		}
+		else {
+			InterlockedExchangePointer((PVOID*)(&(m_ptrWrite)), next);
+		}
+	}
 }
 
 

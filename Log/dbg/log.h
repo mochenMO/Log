@@ -73,8 +73,11 @@
 #include <list>
 #include <map>
 
+#include <Windows.h>
 #include <stdarg.h>
 #include <time.h>
+
+
 
 namespace mochen
 {
@@ -97,11 +100,11 @@ enum class LogLevel
 struct LogEvent
 {
 	time_t	     m_timestamp;
-	std::string* m_loggername; // 申请内存了需要手动释放 
+	std::string *m_loggername; // 申请内存了需要手动释放 
 	LogLevel     m_LogLevel;
-	const char* m_filename;
+	const char  *m_filename;
 	int		     m_line;
-	char* m_content;    // 申请内存了需要手动释放 
+	char        *m_content;    // 申请内存了需要手动释放 
 };
 
 
@@ -138,9 +141,6 @@ public:
 	void log(const char* _massage) override;
 };
 
-// 声明全局函数，代替在头文件中声明全局变量，且返回的指针类型，避免调用拷贝或移动相关函数
-extern inline std::shared_ptr<LogAppender>* getDefaultLogAppender();
-
 
 class FileLogAppender : public LogAppender
 {
@@ -175,6 +175,63 @@ public:
 
 
 
+//// 日志事件管理器
+//class LogEventManager
+//{
+//private:
+//	struct LogEventQueue
+//	{
+//		LogEvent m_data;
+//		LogEventQueue* m_next;
+//		LogEventQueue* m_prev;
+//	};
+//private:
+//	std::thread    m_thread;
+//	std::mutex     m_mutex;
+//	LogEventQueue *m_logEventQueue;
+//	LogEventQueue *m_ptrWrite;
+//	LogEventQueue *m_ptrRead;
+//	LogEventQueue *m_ptrDelete;
+//	bool m_isCanExit;
+//	std::map<std::string, std::list<std::shared_ptr<LogAppender>>> *m_LogAppenderListMap; // LogAppender是虚基类，赋值时无法调用派生类的拷贝或移动函数，因此LogAppender*。同时因为满足第三种内存管理情况，为了方便管理内存，能智能指针。
+//public:
+//	LogEventManager();
+//	~LogEventManager();
+//
+//	LogEventManager(const LogEventManager& _value) = delete;
+//	LogEventManager(LogEventManager&& _value) noexcept = delete;
+//
+//	LogEventManager& operator=(const LogEventManager& _value) = delete;
+//	LogEventManager& operator=(LogEventManager&& _value) noexcept = delete;
+//	
+//	void clearLogEventNodeData(LogEventQueue* _node);
+//	void clearLogEventQueue();
+//
+//	void clearLogAppenderListMap();
+//	void addAppender(std::string _loggername, std::shared_ptr<LogAppender> _appender);   // 注意该数由Logger::addAppender调用，空间是独立的，因此不会线程安全问题
+//	inline bool isFindLogger(const std::string& _loggername);
+//
+//	// void logFormatter(std::stringstream& _ss, LogEvent& _logEvent);
+//
+//	void dealLogEvent_threadFuntion();
+//	void addLogEvent(LogEvent _logEvent);   // 该函数需要线程安全
+//};
+//
+//// 声明全局函数，代替在头文件中声明全局变量，且返回的指针类型，避免调用拷贝或移动相关函数
+//extern inline LogEventManager* getDefaultLogEventManager();
+
+
+
+
+
+
+
+
+
+
+
+
+
 // 日志事件管理器
 class LogEventManager
 {
@@ -183,17 +240,15 @@ private:
 	{
 		LogEvent m_data;
 		LogEventQueue* m_next;
-		LogEventQueue* m_prev;
 	};
 private:
 	std::thread    m_thread;
 	std::mutex     m_mutex;
-	LogEventQueue *m_logEventQueue;
-	LogEventQueue *m_ptrWrite;
-	LogEventQueue *m_ptrRead;
-	LogEventQueue *m_ptrDelete;
+	LogEventQueue* m_logEventQueue;
+	LogEventQueue* m_ptrWrite;   // 原子操作的对象
+	LogEventQueue* m_ptrRead;    // 原子操作的对象
 	bool m_isCanExit;
-	std::map<std::string, std::list<std::shared_ptr<LogAppender>>> *m_LogAppenderListMap; // LogAppender是虚基类，赋值时无法调用派生类的拷贝或移动函数，因此LogAppender*。同时因为满足第三种内存管理情况，为了方便管理内存，能智能指针。
+	std::map<std::string, std::list<std::shared_ptr<LogAppender>>>* m_LogAppenderListMap; // LogAppender是虚基类，赋值时无法调用派生类的拷贝或移动函数，因此LogAppender*。同时因为满足第三种内存管理情况，为了方便管理内存，能智能指针。
 public:
 	LogEventManager();
 	~LogEventManager();
@@ -203,7 +258,7 @@ public:
 
 	LogEventManager& operator=(const LogEventManager& _value) = delete;
 	LogEventManager& operator=(LogEventManager&& _value) noexcept = delete;
-	
+
 	void clearLogEventNodeData(LogEventQueue* _node);
 	void clearLogEventQueue();
 
@@ -211,14 +266,25 @@ public:
 	void addAppender(std::string _loggername, std::shared_ptr<LogAppender> _appender);   // 注意该数由Logger::addAppender调用，空间是独立的，因此不会线程安全问题
 	inline bool isFindLogger(const std::string& _loggername);
 
-	// void logFormatter(std::stringstream& _ss, LogEvent& _logEvent);
-
 	void dealLogEvent_threadFuntion();
 	void addLogEvent(LogEvent _logEvent);   // 该函数需要线程安全
 };
 
 // 声明全局函数，代替在头文件中声明全局变量，且返回的指针类型，避免调用拷贝或移动相关函数
 extern inline LogEventManager* getDefaultLogEventManager();
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 // 日志器
