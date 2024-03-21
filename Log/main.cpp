@@ -65,7 +65,7 @@ void test03()
 	//	printf("main => %d\n", i);
 	//}
 
-	// 结论：由于用多线程异步处理日志，因此logger_debug 比 printf 快至少二十多倍。
+	// 结论：由于用多线程异步处理日志，因此logger_debug 比 printf 快十多倍。
 }
 
 
@@ -89,6 +89,7 @@ void threadFunctionFile(std::string _name, std::string _filename)
 	}
 }
 
+
 // 测试多线程下的线程安全性
 void test04()
 {
@@ -110,14 +111,43 @@ void test04()
 }
 
 
+void threadFunctionConsoleSync(std::string _name, std::string _filename)
+{
+	log::Logger logger(_name);
+	std::shared_ptr<log::FileLogAppender> fileLogAppender = std::make_shared<log::FileLogAppender>();
+	fileLogAppender->open(_filename);
+	logger.addAppender(fileLogAppender);
+	logger.setUpSyncDebug();  // 设置同步模式
+
+	for (int i = 0; i < 100; ++i) {
+		logger_debug(&logger, "%s => %d", _name.c_str(), i);
+		printf("%s => %d\n", _name.c_str(), i);
+	}
+}
+
+
+// 测试同步模式
+void test05()
+{
+	std::thread t01(&threadFunctionConsoleSync, "thread01", "test01");
+	std::thread t02(&threadFunctionConsoleSync, "thread02", "test02");
+	std::thread t03(&threadFunctionConsoleSync, "thread03", "test03");  // 只会有一个日志器在输出，但具体是哪个看谁抢的快
+
+	t01.join();
+	t02.join();
+	t03.join();
+}
+
 
 int main()
 {
-	// test01(); // 测试默认Logger 和自定义Logger
+	test01(); // 测试默认Logger 和自定义Logger
 	// test02(); // 测试文件写入
-	test03(); // 测试运行效率
+	// test03(); // 测试运行效率
 	// test04(); // 测试多线程下的线程安全性
-	
+	// test05(); // 测试同步模式
+
+
 	return 0;
 }
 

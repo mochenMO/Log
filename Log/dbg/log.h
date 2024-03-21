@@ -25,9 +25,10 @@
 *   则可以再在相应的头文件中声明该全局变量。
 * 5.要配合配置系统保存当前使用的文件名，才能实现续写功能，不然一旦文件满了，每次启动程序都会发生文件滚动。
 * 6.为了多线程下的安全性和输出的日志的稳定性，目前不支持根据loggername查找或删除logaddender
-* 7.日志输出格式：[年-月-日 时:分:秒][日志器名称][日志等级][文件名]:[行号][日志信息]
-* 8.文件滚动的命名格式：文件名_log_0000-00-00#00-00-00.txt
-* 9.日志信息的描述格式：完整的函数名():错误类型, 对该问题的描述可以<变量名>更详细的描述该问题
+* 7.Logger::setUpSyncDebug 调用该函数后，只会由最先调用该函数的Logger进行同步的日志输出，其他Logger的输出会被忽略。
+* 8.日志输出格式：[年-月-日 时:分:秒][日志器名称][日志等级][文件名]:[行号][日志信息]
+* 9.文件滚动的命名格式：文件名_log_0000-00-00#00-00-00.txt
+* 10.日志信息的描述格式：完整的函数名():错误类型, 对该问题的描述可以<变量名>更详细的描述该问题
 *	常用的错误类型如下:
 *		index out of range		下标越界
 *		value out of range      数值越界
@@ -172,66 +173,6 @@ public:
 };
 
 
-
-
-
-//// 日志事件管理器
-//class LogEventManager
-//{
-//private:
-//	struct LogEventQueue
-//	{
-//		LogEvent m_data;
-//		LogEventQueue* m_next;
-//		LogEventQueue* m_prev;
-//	};
-//private:
-//	std::thread    m_thread;
-//	std::mutex     m_mutex;
-//	LogEventQueue *m_logEventQueue;
-//	LogEventQueue *m_ptrWrite;
-//	LogEventQueue *m_ptrRead;
-//	LogEventQueue *m_ptrDelete;
-//	bool m_isCanExit;
-//	std::map<std::string, std::list<std::shared_ptr<LogAppender>>> *m_LogAppenderListMap; // LogAppender是虚基类，赋值时无法调用派生类的拷贝或移动函数，因此LogAppender*。同时因为满足第三种内存管理情况，为了方便管理内存，能智能指针。
-//public:
-//	LogEventManager();
-//	~LogEventManager();
-//
-//	LogEventManager(const LogEventManager& _value) = delete;
-//	LogEventManager(LogEventManager&& _value) noexcept = delete;
-//
-//	LogEventManager& operator=(const LogEventManager& _value) = delete;
-//	LogEventManager& operator=(LogEventManager&& _value) noexcept = delete;
-//	
-//	void clearLogEventNodeData(LogEventQueue* _node);
-//	void clearLogEventQueue();
-//
-//	void clearLogAppenderListMap();
-//	void addAppender(std::string _loggername, std::shared_ptr<LogAppender> _appender);   // 注意该数由Logger::addAppender调用，空间是独立的，因此不会线程安全问题
-//	inline bool isFindLogger(const std::string& _loggername);
-//
-//	// void logFormatter(std::stringstream& _ss, LogEvent& _logEvent);
-//
-//	void dealLogEvent_threadFuntion();
-//	void addLogEvent(LogEvent _logEvent);   // 该函数需要线程安全
-//};
-//
-//// 声明全局函数，代替在头文件中声明全局变量，且返回的指针类型，避免调用拷贝或移动相关函数
-//extern inline LogEventManager* getDefaultLogEventManager();
-
-
-
-
-
-
-
-
-
-
-
-
-
 // 日志事件管理器
 class LogEventManager
 {
@@ -265,6 +206,7 @@ public:
 	void clearLogAppenderListMap();
 	void addAppender(std::string _loggername, std::shared_ptr<LogAppender> _appender);   // 注意该数由Logger::addAppender调用，空间是独立的，因此不会线程安全问题
 	inline bool isFindLogger(const std::string& _loggername);
+	inline std::map<std::string, std::list<std::shared_ptr<LogAppender>>>* getLogAppenderListMap();
 
 	void dealLogEvent_threadFuntion();
 	void addLogEvent(LogEvent _logEvent);   // 该函数需要线程安全
@@ -274,24 +216,12 @@ public:
 extern inline LogEventManager* getDefaultLogEventManager();
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 // 日志器
 class Logger
 {
 private:
-	// LogEventManager defauleLogEventManager // 用全局的defauleLogEventManager
+	static std::string *m_syncDebugSetting;   // 存 m_loggername 的地址。原子操作对象
+	std::mutex m_mutex;
 	std::string m_loggername; 
 	LogLevel m_level;
 public:
@@ -304,6 +234,7 @@ public:
 	Logger& operator=(const Logger& _logger) = delete;
 	Logger& operator=(Logger&& _logger) noexcept = delete;
 
+	bool setUpSyncDebug();
 	void log(LogLevel _level,const char* _filename, int _line, const char* _format, ...);
 
 	// inline void setLoggerName(const std::string _loggerName);    // 禁止用户改 loggerName

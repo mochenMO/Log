@@ -356,6 +356,11 @@ inline bool LogEventManager::isFindLogger(const std::string& _loggername)
 }
 
 
+inline std::map<std::string, std::list<std::shared_ptr<LogAppender>>>* LogEventManager::getLogAppenderListMap()
+{
+	return m_LogAppenderListMap;
+}
+
 void LogEventManager::dealLogEvent_threadFuntion()
 {
 	LogEventQueue* tempNode = nullptr;    // 临时保存可读的节点，读取完后，辅助删除
@@ -364,7 +369,7 @@ void LogEventManager::dealLogEvent_threadFuntion()
 	std::stringstream ss;
 
 	 
-	while (m_isCanExit == false || m_ptrRead->m_next != nullptr)  // m_ptrRead == m_ptrWrite   ????
+	while (m_isCanExit == false || m_ptrRead->m_next != nullptr)  // 当 m_ptrRead = m_ptrWrite 时 m_ptrRead->m_next 也会受到内存屏障保护
 	{
 		if (m_ptrRead->m_next != nullptr)
 		{
@@ -381,7 +386,7 @@ void LogEventManager::dealLogEvent_threadFuntion()
 				ss.str("");   // 清空 stringstream
 			}
 
-			if (m_logEventQueue-> m_next != m_ptrRead) {   // 头删法
+			if (m_logEventQueue-> m_next != m_ptrRead) {   // 头删法。当 m_logEventQueue = m_ptrWrite 时 m_logEventQueue->m_next 也会受到内存屏障保护
 				tempNode = m_logEventQueue->m_next;
 				m_logEventQueue->m_next = tempNode->m_next;
 				clearLogEventNodeData(tempNode);
@@ -390,47 +395,6 @@ void LogEventManager::dealLogEvent_threadFuntion()
 		}
 
 	}
-
-
-
-
-	//bool isOk = false;
-
-	//while (m_isCanExit == false || m_ptrRead->m_next != nullptr)  // 注意 m_isCanExit = true 且处理完日志队列中所有数据后才能退出
-	//{
-	//	m_mutex.lock();
-	//	if (m_ptrRead->m_next != nullptr)   // 当m_ptrRead = m_ptrWrite 时可能会在写入途中访问，从而获取无效的值，造成程序的崩溃，因此该代码属于临界区一定要加锁。
-	//	{
-	//		isOk = true;
-	//	}
-	//	m_mutex.unlock();
-
-	//	if (isOk)  // 自锁结构
-	//	{
-	//		tempNode = m_ptrRead->m_next;
-	//		m_ptrRead = m_ptrRead->m_next;
-	//		tempData = tempNode->m_data;
-	//		tempList = &(*m_LogAppenderListMap)[*(tempData.m_loggername)];
-
-	//		for (auto it = tempList->begin(); it != tempList->end(); ++it) {  // 或者用 (*(*it)).getType();
-
-	//			// logFormatter(ss, tempData);
-
-	//			it->get()->getFormatFuntion()(ss, tempData);
-	//			it->get()->log(ss.str().c_str());
-	//			ss.str("");   // 清空 stringstream
-	//		}
-
-	//if (m_logEventQueue->m_next != m_ptrRead) {   // 头删法
-	//	tempNode = m_logEventQueue->m_next;
-	//	m_logEventQueue->m_next = tempNode->m_next;
-	//	clearLogEventNodeData(tempNode);
-	//}
-
-	//		isOk = false; // 自锁结构
-	//	}
-	//}
-
 
 }
 
@@ -443,19 +407,19 @@ void LogEventManager::addLogEvent(LogEvent _logEvent)
 
 	while (true) // 原子操作通常要配合自旋锁
 	{  
-		LogEventQueue* currentWrite = m_ptrWrite;
+		LogEventQueue* currentWrite = m_ptrWrite;     // m_ptrWrite是原子操作的对象，因此可以直接读取用于判断，但不能 m_ptrWrite = XXXX 或 m_ptrWrite->next = XXXX
 		LogEventQueue* next = currentWrite->m_next;   // 注意：不是 m_ptrWrite->m_next
 
 		if (currentWrite == m_ptrWrite) {
 			if(next == nullptr) {
-				if (InterlockedCompareExchangePointer((PVOID*)(&(currentWrite->m_next)), newNode, nullptr) == nullptr) {
-					InterlockedExchangePointer((PVOID*)(&(m_ptrWrite)), newNode);
+				if (InterlockedCompareExchangePointer((PVOID*)(&(currentWrite->m_next)), newNode, nullptr) == nullptr) {   // 注意用 currentWrite->m_next 而不是 m_ptrWrite->next 是因为 m_ptrWrite 可能会变。同时当 currentWrite == m_ptrWrite 时，m_ptrWrite->next 也会受到内存屏障保护
+					InterlockedExchangePointer((PVOID*)(&(m_ptrWrite)), newNode); // 注意用 newNode 赋值，注意最后即使 m_ptrWrite 不在最尾端也没关系
 					break;
 				}
 			}
 		}
 		else {
-			InterlockedExchangePointer((PVOID*)(&(m_ptrWrite)), next);
+			InterlockedExchangePointer((PVOID*)(&(m_ptrWrite)), next);  // 注意用 next 赋值
 		}
 	}
 }
@@ -466,6 +430,8 @@ void LogEventManager::addLogEvent(LogEvent _logEvent)
 // =============================================================================================================
 // class Logger
 
+std::string* Logger::m_syncDebugSetting = nullptr;  // 注意：静态成员变量要先在类外初始化后，才能在成员函数中赋值，不晚会报错，无法解析的外部符号
+
 Logger::Logger(const std::string& _loggername, LogLevel _level, std::shared_ptr<LogAppender> _appender)
 {
 	// 注意 getDefaultLogEventManager() 这段代码保证了 LogEventManager 在 Logger 之前创建，确保了 LogEventManager 最后才销毁
@@ -474,17 +440,27 @@ Logger::Logger(const std::string& _loggername, LogLevel _level, std::shared_ptr<
 	}
 
 	m_level = _level;
-
 	m_loggername = _loggername;
 	getDefaultLogEventManager()->addAppender(_loggername, _appender);
 
 	return;
 }
 
+bool Logger::setUpSyncDebug()
+{
+	void* temp = &m_loggername;
+	if (m_syncDebugSetting == nullptr) {
+		InterlockedCompareExchangePointer((PVOID*)(&m_syncDebugSetting), temp, nullptr);
+		return true;
+	}
+	return false;
+}
+
+
 
 void Logger::log(LogLevel _level, const char* _filename, int _line, const char* _format, ...)
 {
-	if ((int)m_level > (int)_level) {
+	if ((int)m_level > (int)_level || (m_syncDebugSetting != nullptr && m_syncDebugSetting != &m_loggername)) {
 		return;
 	}
 
@@ -503,7 +479,22 @@ void Logger::log(LogLevel _level, const char* _filename, int _line, const char* 
 	data.m_line = _line;
 	data.m_content = buffer;
 
-	getDefaultLogEventManager()->addLogEvent(data);
+	if (m_syncDebugSetting == nullptr) {
+		getDefaultLogEventManager()->addLogEvent(data);
+	}
+	else {
+		std::stringstream ss;
+		auto* tempMap = getDefaultLogEventManager()->getLogAppenderListMap();
+		std::list<std::shared_ptr<LogAppender>>* tempList = &(*tempMap)[m_loggername];
+
+		for (auto it = tempList->begin(); it != tempList->end(); ++it) {  // 或者用 (*(*it)).getType();
+			it->get()->getFormatFuntion()(ss, data);
+			it->get()->log(ss.str().c_str());
+			ss.str("");   // 清空 stringstream
+		}
+		free(data.m_content);
+		delete data.m_loggername;
+	}
 }
 
 inline std::string Logger::getLoggerName()
